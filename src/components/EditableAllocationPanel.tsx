@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
-import { ClientBonusCalculation, Person, TeamAllocation, Client } from "@/types/bonus";
+import { ClientBonusCalculation, Person, TeamAllocation, Client, Override } from "@/types/bonus";
 import { formatCurrency, formatPercentage, calculateClientBonus } from "@/lib/bonusCalculations";
-import { X, Calculator, Users, TrendingUp, AlertTriangle, Check, Plus, Trash2, History } from "lucide-react";
+import { X, Calculator, Users, TrendingUp, AlertTriangle, Check, Plus, Trash2, History, FileEdit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -13,15 +13,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Settings } from "@/types/bonus";
+import { BonusOverrideDialog } from "@/components/BonusOverrideDialog";
+import { OverrideHistory } from "@/components/OverrideHistory";
 
 interface EditableAllocationPanelProps {
   calculation: ClientBonusCalculation | null;
   client: Client | null;
   people: Person[];
   settings: Settings;
+  overrides: Override[];
   onClose: () => void;
   onSave: (clientId: string, allocations: TeamAllocation[]) => void;
   onViewHistory: (clientId: string) => void;
+  onAddOverride: (override: Omit<Override, "id" | "approvalDate">) => void;
 }
 
 export function EditableAllocationPanel({
@@ -29,13 +33,17 @@ export function EditableAllocationPanel({
   client,
   people,
   settings,
+  overrides,
   onClose,
   onSave,
   onViewHistory,
+  onAddOverride,
 }: EditableAllocationPanelProps) {
   const [localAllocations, setLocalAllocations] = useState<TeamAllocation[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [newMemberId, setNewMemberId] = useState<string>("");
+  const [showOverrideDialog, setShowOverrideDialog] = useState(false);
+  const [showOverrideHistory, setShowOverrideHistory] = useState(false);
 
   useEffect(() => {
     if (client) {
@@ -210,20 +218,33 @@ export function EditableAllocationPanel({
               <Users className="h-4 w-4 text-muted-foreground" />
               <h3 className="font-medium">Team Allocation</h3>
             </div>
-            {!isEditing ? (
-              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                Edit Weights
-              </Button>
-            ) : (
-              <div className="flex gap-2">
-                <Button variant="ghost" size="sm" onClick={handleCancel}>
-                  Cancel
-                </Button>
-                <Button size="sm" onClick={handleSave} disabled={!isValid}>
-                  Save Changes
-                </Button>
-              </div>
-            )}
+            <div className="flex gap-2">
+              {!isEditing ? (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowOverrideDialog(true)}
+                    className="gap-1"
+                  >
+                    <FileEdit className="h-4 w-4" />
+                    Override
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                    Edit Weights
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="ghost" size="sm" onClick={handleCancel}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" onClick={handleSave} disabled={!isValid}>
+                    Save Changes
+                  </Button>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -232,6 +253,7 @@ export function EditableAllocationPanel({
               const previewAlloc = previewCalculation?.allocations.find(
                 (a) => a.personId === allocation.personId
               );
+              const override = overrides.find((o) => o.personId === allocation.personId);
 
               return (
                 <div
@@ -248,7 +270,12 @@ export function EditableAllocationPanel({
                       </span>
                     </div>
                     <div>
-                      <p className="text-sm font-medium">{person?.name ?? "Unknown"}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium">{person?.name ?? "Unknown"}</p>
+                        {override && (
+                          <StatusBadge status="warning">Overridden</StatusBadge>
+                        )}
+                      </div>
                       {isEditing ? (
                         <div className="flex items-center gap-1 mt-1">
                           <Input
@@ -271,9 +298,20 @@ export function EditableAllocationPanel({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`font-semibold ${isValid ? "text-success" : "text-muted-foreground"}`}>
-                      {formatCurrency(previewAlloc?.bonusAmount ?? 0)}
-                    </span>
+                    {override ? (
+                      <div className="text-right">
+                        <span className="font-semibold text-primary">
+                          {formatCurrency(override.overrideAmount)}
+                        </span>
+                        <p className="text-xs text-muted-foreground line-through">
+                          {formatCurrency(previewAlloc?.bonusAmount ?? 0)}
+                        </p>
+                      </div>
+                    ) : (
+                      <span className={`font-semibold ${isValid ? "text-success" : "text-muted-foreground"}`}>
+                        {formatCurrency(previewAlloc?.bonusAmount ?? 0)}
+                      </span>
+                    )}
                     {isEditing && (
                       <Button
                         variant="ghost"
@@ -317,7 +355,42 @@ export function EditableAllocationPanel({
             )}
           </div>
         </div>
+
+        {/* Override History */}
+        {overrides.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <FileEdit className="h-4 w-4 text-muted-foreground" />
+                <h3 className="font-medium">Override History</h3>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowOverrideHistory(!showOverrideHistory)}
+              >
+                {showOverrideHistory ? "Hide" : "Show"}
+              </Button>
+            </div>
+            {showOverrideHistory && (
+              <div className="bg-muted/50 rounded-lg p-4 overflow-x-auto">
+                <OverrideHistory overrides={overrides} people={people} clientFilter={client.id} />
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Override Dialog */}
+      <BonusOverrideDialog
+        open={showOverrideDialog}
+        onOpenChange={setShowOverrideDialog}
+        clientId={client.id}
+        clientName={client.name}
+        allocations={previewCalculation?.allocations ?? calculation.allocations}
+        existingOverrides={overrides}
+        onSubmitOverride={onAddOverride}
+      />
     </div>
   );
 }

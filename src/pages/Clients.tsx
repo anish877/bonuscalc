@@ -6,8 +6,15 @@ import { EditableAllocationPanel } from "@/components/EditableAllocationPanel";
 import { ClientBonusHistory } from "@/components/ClientBonusHistory";
 import { useClientData } from "@/hooks/useClientData";
 import { Button } from "@/components/ui/button";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { exportBonusCalculations, exportBonusHistory } from "@/lib/exportUtils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const Clients = () => {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
@@ -19,9 +26,13 @@ const Clients = () => {
     people,
     settings,
     calculations,
+    bonusHistory,
+    overrides,
     updateClientAllocations,
     getClientById,
     getClientBonusHistory,
+    addOverride,
+    getClientOverrides,
   } = useClientData();
 
   const filteredCalculations = useMemo(() => {
@@ -41,6 +52,8 @@ const Clients = () => {
   const historyClient = historyClientId ? getClientById(historyClientId) : null;
   const clientHistory = historyClientId ? getClientBonusHistory(historyClientId) : [];
 
+  const selectedClientOverrides = selectedClientId ? getClientOverrides(selectedClientId) : [];
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -48,10 +61,28 @@ const Clients = () => {
           title="Clients"
           description="Manage client revenue and bonus allocations"
           action={
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Client
-            </Button>
+            <div className="flex gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <Download className="h-4 w-4" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => exportBonusCalculations(calculations, overrides)}>
+                    Export Current Calculations
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportBonusHistory(bonusHistory)}>
+                    Export Full History
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add Client
+              </Button>
+            </div>
           }
         />
 
@@ -79,12 +110,14 @@ const Clients = () => {
         client={selectedClient ?? null}
         people={people}
         settings={settings}
+        overrides={selectedClientOverrides}
         onClose={() => setSelectedClientId(null)}
         onSave={updateClientAllocations}
         onViewHistory={(clientId) => {
           setSelectedClientId(null);
           setHistoryClientId(clientId);
         }}
+        onAddOverride={addOverride}
       />
 
       {/* Client History Panel */}

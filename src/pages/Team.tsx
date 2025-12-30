@@ -5,14 +5,21 @@ import { TeamTable } from "@/components/TeamTable";
 import { PersonBonusHistory } from "@/components/PersonBonusHistory";
 import { useClientData } from "@/hooks/useClientData";
 import { Button } from "@/components/ui/button";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { exportTeamSummary, exportBonusHistory } from "@/lib/exportUtils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const Team = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
 
-  const { people, calculations, getPersonBonusHistory } = useClientData();
+  const { people, calculations, bonusHistory, getPersonBonusHistory } = useClientData();
 
   const filteredPeople = useMemo(() => {
     if (!searchQuery) return people;
@@ -36,10 +43,28 @@ const Team = () => {
           title="Team"
           description="Manage team members and their bonus allocations"
           action={
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Member
-            </Button>
+            <div className="flex gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" className="gap-2">
+                    <Download className="h-4 w-4" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => exportTeamSummary(calculations, people)}>
+                    Export Team Summary
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportBonusHistory(bonusHistory)}>
+                    Export Full History
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button className="gap-2">
+                <Plus className="h-4 w-4" />
+                Add Member
+              </Button>
+            </div>
           }
         />
 

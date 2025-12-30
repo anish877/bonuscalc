@@ -1,10 +1,11 @@
 import { useMemo } from "react";
 import { BonusHistoryRecord, Person } from "@/types/bonus";
 import { formatCurrency, formatPercentage } from "@/lib/bonusCalculations";
-import { X, Calendar, TrendingUp } from "lucide-react";
+import { X, Calendar, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { getPayoutCycleLabel } from "@/hooks/useClientData";
+import { exportPersonBonusHistory } from "@/lib/exportUtils";
 
 interface PersonBonusHistoryProps {
   person: Person | null;
@@ -25,15 +26,6 @@ export function PersonBonusHistory({ person, history, onClose }: PersonBonusHist
     return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
   }, [history]);
 
-  // Calculate totals per cycle
-  const totalsByCycle = useMemo(() => {
-    return groupedByCycle.map(([cycle, records]) => ({
-      cycle,
-      total: records.reduce((sum, r) => sum + r.bonusAmount, 0),
-      clients: records.length,
-    }));
-  }, [groupedByCycle]);
-
   const grandTotal = history.reduce((sum, r) => sum + r.bonusAmount, 0);
 
   return (
@@ -50,9 +42,20 @@ export function PersonBonusHistory({ person, history, onClose }: PersonBonusHist
             <p className="text-sm text-muted-foreground">6-Month Payout Cycles</p>
           </div>
         </div>
-        <Button variant="ghost" size="icon" onClick={onClose}>
-          <X className="h-5 w-5" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => exportPersonBonusHistory(person.name, history)}
+            className="gap-1"
+          >
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onClose}>
+            <X className="h-5 w-5" />
+          </Button>
+        </div>
       </div>
 
       {/* Summary Card */}
