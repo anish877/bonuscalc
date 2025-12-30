@@ -1,13 +1,14 @@
 import { Person, ClientBonusCalculation } from "@/types/bonus";
 import { getPersonTotalBonus, formatCurrency } from "@/lib/bonusCalculations";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, History } from "lucide-react";
 
 interface TeamTableProps {
   people: Person[];
   calculations: ClientBonusCalculation[];
+  onPersonClick?: (personId: string) => void;
 }
 
-export function TeamTable({ people, calculations }: TeamTableProps) {
+export function TeamTable({ people, calculations, onPersonClick }: TeamTableProps) {
   const teamBonuses = people.map((person) => ({
     person,
     totalBonus: getPersonTotalBonus(person.id, calculations),
@@ -36,6 +37,7 @@ export function TeamTable({ people, calculations }: TeamTableProps) {
             <tr
               key={person.id}
               className="transition-colors hover:bg-muted/50 cursor-pointer"
+              onClick={() => onPersonClick?.(person.id)}
             >
               <td>
                 <div className="flex items-center gap-3">
@@ -67,7 +69,10 @@ export function TeamTable({ people, calculations }: TeamTableProps) {
                 </span>
               </td>
               <td>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                <div className="flex items-center gap-1">
+                  <History className="h-4 w-4 text-muted-foreground" />
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </div>
               </td>
             </tr>
           ))}

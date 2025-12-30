@@ -1,30 +1,33 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { SectionHeader } from "@/components/SectionHeader";
 import { TeamTable } from "@/components/TeamTable";
-import { mockClients, mockPeople, mockSettings } from "@/data/mockData";
-import { calculateAllBonuses } from "@/lib/bonusCalculations";
+import { PersonBonusHistory } from "@/components/PersonBonusHistory";
+import { useClientData } from "@/hooks/useClientData";
 import { Button } from "@/components/ui/button";
 import { Plus, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
 
 const Team = () => {
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
 
-  const calculations = useMemo(
-    () => calculateAllBonuses(mockClients, mockSettings, mockPeople),
-    []
-  );
+  const { people, calculations, getPersonBonusHistory } = useClientData();
 
   const filteredPeople = useMemo(() => {
-    if (!searchQuery) return mockPeople;
-    return mockPeople.filter(
+    if (!searchQuery) return people;
+    return people.filter(
       (p) =>
         p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.role.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  }, [searchQuery]);
+  }, [searchQuery, people]);
+
+  const selectedPerson = selectedPersonId
+    ? people.find((p) => p.id === selectedPersonId) ?? null
+    : null;
+
+  const personHistory = selectedPersonId ? getPersonBonusHistory(selectedPersonId) : [];
 
   return (
     <Layout>
@@ -52,8 +55,27 @@ const Team = () => {
         </div>
 
         {/* Table */}
-        <TeamTable people={filteredPeople} calculations={calculations} />
+        <TeamTable
+          people={filteredPeople}
+          calculations={calculations}
+          onPersonClick={setSelectedPersonId}
+        />
       </div>
+
+      {/* Person History Panel */}
+      <PersonBonusHistory
+        person={selectedPerson}
+        history={personHistory}
+        onClose={() => setSelectedPersonId(null)}
+      />
+
+      {/* Overlay */}
+      {selectedPersonId && (
+        <div
+          className="fixed inset-0 bg-foreground/10 z-40"
+          onClick={() => setSelectedPersonId(null)}
+        />
+      )}
     </Layout>
   );
 };

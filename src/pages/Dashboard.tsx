@@ -4,10 +4,10 @@ import { MetricCard } from "@/components/MetricCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { ClientTable } from "@/components/ClientTable";
 import { TeamTable } from "@/components/TeamTable";
-import { ClientDetailPanel } from "@/components/ClientDetailPanel";
-import { mockClients, mockPeople, mockSettings } from "@/data/mockData";
+import { EditableAllocationPanel } from "@/components/EditableAllocationPanel";
+import { PersonBonusHistory } from "@/components/PersonBonusHistory";
+import { useClientData } from "@/hooks/useClientData";
 import {
-  calculateAllBonuses,
   getPersonTotalBonus,
   formatCurrency,
 } from "@/lib/bonusCalculations";
@@ -16,16 +16,30 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Dashboard = () => {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
 
-  const calculations = useMemo(
-    () => calculateAllBonuses(mockClients, mockSettings, mockPeople),
-    []
-  );
+  const {
+    clients,
+    people,
+    settings,
+    calculations,
+    updateClientAllocations,
+    getClientById,
+    getPersonBonusHistory,
+  } = useClientData();
 
   const selectedCalculation = useMemo(
     () => calculations.find((c) => c.clientId === selectedClientId) ?? null,
     [calculations, selectedClientId]
   );
+
+  const selectedClient = selectedClientId ? getClientById(selectedClientId) : null;
+
+  const selectedPerson = selectedPersonId
+    ? people.find((p) => p.id === selectedPersonId) ?? null
+    : null;
+
+  const personHistory = selectedPersonId ? getPersonBonusHistory(selectedPersonId) : [];
 
   // Calculate summary metrics
   const totalBonusPool = calculations.reduce(
@@ -37,11 +51,11 @@ const Dashboard = () => {
     0
   );
   const avgBonusPerPerson =
-    mockPeople.length > 0
-      ? mockPeople.reduce(
+    people.length > 0
+      ? people.reduce(
           (sum, p) => sum + getPersonTotalBonus(p.id, calculations),
           0
-        ) / mockPeople.length
+        ) / people.length
       : 0;
   const invalidClients = calculations.filter((c) => !c.isWeightValid).length;
 
@@ -75,7 +89,7 @@ const Dashboard = () => {
           />
           <MetricCard
             title="Active Clients"
-            value={String(mockClients.length)}
+            value={String(clients.length)}
             subtitle={`${invalidClients} with allocation issues`}
             icon={Building2}
             variant={invalidClients > 0 ? "warning" : "default"}
@@ -83,7 +97,7 @@ const Dashboard = () => {
           <MetricCard
             title="Avg Bonus/Person"
             value={formatCurrency(avgBonusPerPerson)}
-            subtitle={`${mockPeople.length} team members`}
+            subtitle={`${people.length} team members`}
             icon={Users}
             variant="default"
           />
@@ -112,22 +126,41 @@ const Dashboard = () => {
               title="Team Bonus Distribution"
               description="Total bonuses by team member across all clients"
             />
-            <TeamTable people={mockPeople} calculations={calculations} />
+            <TeamTable
+              people={people}
+              calculations={calculations}
+              onPersonClick={setSelectedPersonId}
+            />
           </TabsContent>
         </Tabs>
       </div>
 
-      {/* Detail Panel */}
-      <ClientDetailPanel
+      {/* Editable Client Panel */}
+      <EditableAllocationPanel
         calculation={selectedCalculation}
+        client={selectedClient ?? null}
+        people={people}
+        settings={settings}
         onClose={() => setSelectedClientId(null)}
+        onSave={updateClientAllocations}
+        onViewHistory={() => {}}
+      />
+
+      {/* Person History Panel */}
+      <PersonBonusHistory
+        person={selectedPerson}
+        history={personHistory}
+        onClose={() => setSelectedPersonId(null)}
       />
 
       {/* Overlay when panel is open */}
-      {selectedClientId && (
+      {(selectedClientId || selectedPersonId) && (
         <div
           className="fixed inset-0 bg-foreground/10 z-40"
-          onClick={() => setSelectedClientId(null)}
+          onClick={() => {
+            setSelectedClientId(null);
+            setSelectedPersonId(null);
+          }}
         />
       )}
     </Layout>
