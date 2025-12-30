@@ -23,10 +23,15 @@ const Dashboard = () => {
     people,
     settings,
     calculations,
+    overrides,
     updateClientAllocations,
     getClientById,
     getPersonBonusHistory,
+    addOverride,
+    getClientOverrides,
   } = useClientData();
+
+  const selectedClientOverrides = selectedClientId ? getClientOverrides(selectedClientId) : [];
 
   const selectedCalculation = useMemo(
     () => calculations.find((c) => c.clientId === selectedClientId) ?? null,
@@ -141,9 +146,11 @@ const Dashboard = () => {
         client={selectedClient ?? null}
         people={people}
         settings={settings}
+        overrides={selectedClientOverrides}
         onClose={() => setSelectedClientId(null)}
         onSave={updateClientAllocations}
         onViewHistory={() => {}}
+        onAddOverride={addOverride}
       />
 
       {/* Person History Panel */}

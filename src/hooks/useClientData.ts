@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
-import { Client, Person, Settings, TeamAllocation, BonusHistoryRecord, AllocationChange } from "@/types/bonus";
-import { mockClients, mockPeople, mockSettings } from "@/data/mockData";
+import { Client, Person, Settings, TeamAllocation, BonusHistoryRecord, AllocationChange, Override } from "@/types/bonus";
+import { mockClients, mockPeople, mockSettings, mockOverrides } from "@/data/mockData";
 import { calculateAllBonuses, calculateClientBonus } from "@/lib/bonusCalculations";
 
 // Generate 6-month payout cycle ID (e.g., "2024-H1" for Jan-Jun, "2024-H2" for Jul-Dec)
@@ -83,6 +83,7 @@ export function useClientData() {
     generateInitialHistory(mockClients, mockSettings, mockPeople)
   );
   const [allocationChanges, setAllocationChanges] = useState<AllocationChange[]>([]);
+  const [overrides, setOverrides] = useState<Override[]>(mockOverrides);
 
   const calculations = useMemo(
     () => calculateAllBonuses(clients, settings, people),
@@ -179,6 +180,29 @@ export function useClientData() {
     [bonusHistory]
   );
 
+  const addOverride = useCallback(
+    (overrideData: Omit<Override, "id" | "approvalDate">) => {
+      const newOverride: Override = {
+        ...overrideData,
+        id: `override-${Date.now()}`,
+        approvalDate: new Date(),
+      };
+      setOverrides((prev) => {
+        // Remove existing override for same client/person if exists
+        const filtered = prev.filter(
+          (o) => !(o.clientId === overrideData.clientId && o.personId === overrideData.personId)
+        );
+        return [newOverride, ...filtered];
+      });
+    },
+    []
+  );
+
+  const getClientOverrides = useCallback(
+    (clientId: string) => overrides.filter((o) => o.clientId === clientId),
+    [overrides]
+  );
+
   return {
     clients,
     people,
@@ -186,11 +210,14 @@ export function useClientData() {
     calculations,
     bonusHistory,
     allocationChanges,
+    overrides,
     updateClientAllocations,
     addTeamMember,
     removeTeamMember,
     getClientById,
     getPersonBonusHistory,
     getClientBonusHistory,
+    addOverride,
+    getClientOverrides,
   };
 }
