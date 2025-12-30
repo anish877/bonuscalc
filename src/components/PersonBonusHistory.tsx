@@ -4,6 +4,7 @@ import { formatCurrency, formatPercentage } from "@/lib/bonusCalculations";
 import { X, Calendar, TrendingUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { getPayoutCycleLabel } from "@/hooks/useClientData";
 
 interface PersonBonusHistoryProps {
   person: Person | null;
@@ -14,8 +15,8 @@ interface PersonBonusHistoryProps {
 export function PersonBonusHistory({ person, history, onClose }: PersonBonusHistoryProps) {
   if (!person) return null;
 
-  // Group by period
-  const groupedByPeriod = useMemo(() => {
+  // Group by 6-month payout cycle
+  const groupedByCycle = useMemo(() => {
     const groups: Record<string, BonusHistoryRecord[]> = {};
     history.forEach((h) => {
       if (!groups[h.period]) groups[h.period] = [];
@@ -24,24 +25,16 @@ export function PersonBonusHistory({ person, history, onClose }: PersonBonusHist
     return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
   }, [history]);
 
-  // Calculate totals
-  const totalsByPeriod = useMemo(() => {
-    return groupedByPeriod.map(([period, records]) => ({
-      period,
+  // Calculate totals per cycle
+  const totalsByCycle = useMemo(() => {
+    return groupedByCycle.map(([cycle, records]) => ({
+      cycle,
       total: records.reduce((sum, r) => sum + r.bonusAmount, 0),
       clients: records.length,
     }));
-  }, [groupedByPeriod]);
+  }, [groupedByCycle]);
 
   const grandTotal = history.reduce((sum, r) => sum + r.bonusAmount, 0);
-
-  const formatPeriod = (period: string) => {
-    const [year, month] = period.split("-");
-    return new Date(parseInt(year), parseInt(month) - 1).toLocaleDateString("en-US", {
-      month: "short",
-      year: "numeric",
-    });
-  };
 
   return (
     <div className="fixed inset-y-0 right-0 w-[520px] bg-card border-l border-border shadow-lg z-50 slide-up overflow-hidden flex flex-col">
@@ -54,7 +47,7 @@ export function PersonBonusHistory({ person, history, onClose }: PersonBonusHist
           </div>
           <div>
             <h2 className="font-semibold">{person.name}</h2>
-            <p className="text-sm text-muted-foreground">Bonus History (6 Months)</p>
+            <p className="text-sm text-muted-foreground">6-Month Payout Cycles</p>
           </div>
         </div>
         <Button variant="ghost" size="icon" onClick={onClose}>
@@ -66,34 +59,35 @@ export function PersonBonusHistory({ person, history, onClose }: PersonBonusHist
       <div className="px-6 py-4 border-b border-border bg-muted/30">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">Total Bonus (6 Months)</p>
+            <p className="text-sm text-muted-foreground">Total Bonus (All Cycles)</p>
             <p className="text-2xl font-bold text-success">{formatCurrency(grandTotal)}</p>
           </div>
           <div className="text-right">
-            <p className="text-sm text-muted-foreground">Avg per Month</p>
-            <p className="text-lg font-semibold">
-              {formatCurrency(grandTotal / Math.max(groupedByPeriod.length, 1))}
-            </p>
+            <p className="text-sm text-muted-foreground">Payout Cycles</p>
+            <p className="text-lg font-semibold">{groupedByCycle.length}</p>
           </div>
         </div>
       </div>
 
       <ScrollArea className="flex-1">
         <div className="p-6 space-y-6">
-          {groupedByPeriod.map(([period, records]) => {
-            const periodTotal = records.reduce((sum, r) => sum + r.bonusAmount, 0);
+          {groupedByCycle.map(([cycle, records]) => {
+            const cycleTotal = records.reduce((sum, r) => sum + r.bonusAmount, 0);
 
             return (
-              <div key={period} className="space-y-3">
-                <div className="flex items-center justify-between">
+              <div key={cycle} className="space-y-3">
+                <div className="flex items-center justify-between bg-primary/5 rounded-lg p-3">
                   <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <h3 className="font-medium">{formatPeriod(period)}</h3>
+                    <Calendar className="h-4 w-4 text-primary" />
+                    <h3 className="font-semibold text-primary">{getPayoutCycleLabel(cycle)}</h3>
                   </div>
-                  <span className="font-semibold text-success">{formatCurrency(periodTotal)}</span>
+                  <div className="text-right">
+                    <span className="font-bold text-lg text-success">{formatCurrency(cycleTotal)}</span>
+                    <p className="text-xs text-muted-foreground">{records.length} client{records.length !== 1 ? 's' : ''}</p>
+                  </div>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 pl-2">
                   {records.map((record) => (
                     <div
                       key={record.id}
@@ -121,7 +115,7 @@ export function PersonBonusHistory({ person, history, onClose }: PersonBonusHist
             );
           })}
 
-          {groupedByPeriod.length === 0 && (
+          {groupedByCycle.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               No bonus history available
             </div>

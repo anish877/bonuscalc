@@ -3,7 +3,29 @@ import { Client, Person, Settings, TeamAllocation, BonusHistoryRecord, Allocatio
 import { mockClients, mockPeople, mockSettings } from "@/data/mockData";
 import { calculateAllBonuses, calculateClientBonus } from "@/lib/bonusCalculations";
 
-// Generate initial bonus history from current data
+// Generate 6-month payout cycle ID (e.g., "2024-H1" for Jan-Jun, "2024-H2" for Jul-Dec)
+function getPayoutCycleId(date: Date): string {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const half = month < 6 ? "H1" : "H2";
+  return `${year}-${half}`;
+}
+
+function getPayoutCycleLabel(cycleId: string): string {
+  const [year, half] = cycleId.split("-");
+  if (half === "H1") {
+    return `Jan - Jun ${year}`;
+  }
+  return `Jul - Dec ${year}`;
+}
+
+function getCycleStartDate(cycleId: string): Date {
+  const [year, half] = cycleId.split("-");
+  const month = half === "H1" ? 0 : 6;
+  return new Date(parseInt(year), month, 1);
+}
+
+// Generate bonus history for 6-month payout cycles
 function generateInitialHistory(
   clients: Client[],
   settings: Settings,
@@ -12,18 +34,28 @@ function generateInitialHistory(
   const history: BonusHistoryRecord[] = [];
   const calculations = calculateAllBonuses(clients, settings, people);
   
-  // Generate last 6 months of history
   const now = new Date();
-  for (let i = 0; i < 6; i++) {
-    const periodDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const period = `${periodDate.getFullYear()}-${String(periodDate.getMonth() + 1).padStart(2, '0')}`;
+  const currentCycle = getPayoutCycleId(now);
+  
+  // Generate last 3 payout cycles (current + 2 previous = 18 months of history)
+  const cycles: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const cycleDate = new Date(now.getFullYear(), now.getMonth() - (i * 6), 1);
+    const cycleId = getPayoutCycleId(cycleDate);
+    if (!cycles.includes(cycleId)) {
+      cycles.push(cycleId);
+    }
+  }
+  
+  cycles.forEach(cycleId => {
+    const cycleStartDate = getCycleStartDate(cycleId);
     
     calculations.forEach(calc => {
       calc.allocations.forEach(alloc => {
         history.push({
-          id: `${period}-${calc.clientId}-${alloc.personId}`,
-          period,
-          calculatedAt: periodDate,
+          id: `${cycleId}-${calc.clientId}-${alloc.personId}`,
+          period: cycleId,
+          calculatedAt: cycleStartDate,
           clientId: calc.clientId,
           clientName: calc.clientName,
           personId: alloc.personId,
@@ -36,10 +68,12 @@ function generateInitialHistory(
         });
       });
     });
-  }
+  });
   
   return history;
 }
+
+export { getPayoutCycleLabel };
 
 export function useClientData() {
   const [clients, setClients] = useState<Client[]>(mockClients);
