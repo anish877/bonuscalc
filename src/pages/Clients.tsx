@@ -2,21 +2,27 @@ import { useState, useMemo } from "react";
 import { Layout } from "@/components/Layout";
 import { SectionHeader } from "@/components/SectionHeader";
 import { ClientTable } from "@/components/ClientTable";
-import { ClientDetailPanel } from "@/components/ClientDetailPanel";
-import { mockClients, mockPeople, mockSettings } from "@/data/mockData";
-import { calculateAllBonuses } from "@/lib/bonusCalculations";
+import { EditableAllocationPanel } from "@/components/EditableAllocationPanel";
+import { ClientBonusHistory } from "@/components/ClientBonusHistory";
+import { useClientData } from "@/hooks/useClientData";
 import { Button } from "@/components/ui/button";
 import { Plus, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 const Clients = () => {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [historyClientId, setHistoryClientId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  const calculations = useMemo(
-    () => calculateAllBonuses(mockClients, mockSettings, mockPeople),
-    []
-  );
+  const {
+    clients,
+    people,
+    settings,
+    calculations,
+    updateClientAllocations,
+    getClientById,
+    getClientBonusHistory,
+  } = useClientData();
 
   const filteredCalculations = useMemo(() => {
     if (!searchQuery) return calculations;
@@ -29,6 +35,11 @@ const Clients = () => {
     () => calculations.find((c) => c.clientId === selectedClientId) ?? null,
     [calculations, selectedClientId]
   );
+
+  const selectedClient = selectedClientId ? getClientById(selectedClientId) : null;
+
+  const historyClient = historyClientId ? getClientById(historyClientId) : null;
+  const clientHistory = historyClientId ? getClientBonusHistory(historyClientId) : [];
 
   return (
     <Layout>
@@ -62,17 +73,37 @@ const Clients = () => {
         />
       </div>
 
-      {/* Detail Panel */}
-      <ClientDetailPanel
+      {/* Editable Detail Panel */}
+      <EditableAllocationPanel
         calculation={selectedCalculation}
+        client={selectedClient ?? null}
+        people={people}
+        settings={settings}
         onClose={() => setSelectedClientId(null)}
+        onSave={updateClientAllocations}
+        onViewHistory={(clientId) => {
+          setSelectedClientId(null);
+          setHistoryClientId(clientId);
+        }}
       />
 
+      {/* Client History Panel */}
+      {historyClientId && historyClient && (
+        <ClientBonusHistory
+          clientName={historyClient.name}
+          history={clientHistory}
+          onClose={() => setHistoryClientId(null)}
+        />
+      )}
+
       {/* Overlay */}
-      {selectedClientId && (
+      {(selectedClientId || historyClientId) && (
         <div
           className="fixed inset-0 bg-foreground/10 z-40"
-          onClick={() => setSelectedClientId(null)}
+          onClick={() => {
+            setSelectedClientId(null);
+            setHistoryClientId(null);
+          }}
         />
       )}
     </Layout>

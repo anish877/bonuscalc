@@ -68,3 +68,28 @@ export interface Override {
   approvedBy: string;
   approvalDate: Date;
 }
+
+export interface BonusHistoryRecord {
+  id: string;
+  period: string; // YYYY-MM format for the calculation period
+  calculatedAt: Date;
+  clientId: string;
+  clientName: string;
+  personId: string;
+  personName: string;
+  weight: number;
+  bonusAmount: number;
+  totalClientBonus: number;
+  averageMonthlyRevenue: number;
+  appliedBonusPercentage: number;
+}
+
+export interface AllocationChange {
+  id: string;
+  clientId: string;
+  personId: string;
+  previousWeight: number;
+  newWeight: number;
+  changedAt: Date;
+  changedBy: string;
+}
