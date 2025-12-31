@@ -231,12 +231,12 @@ export function EditableAllocationPanel({
             <div className="flex items-center gap-2">
               <Button 
                 variant="default" 
-                size="default" 
-                className="gap-1 bg-primary text-primary-foreground hover:bg-primary/90 shadow-md"
+                size="lg" 
+                className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg font-bold text-md px-6"
                 onClick={() => setShowPayoutDialog(true)}
                 disabled={!calculation.isEligible}
               >
-                <DollarSign className="h-4 w-4" />
+                <DollarSign className="h-5 w-5" />
                 Payout
               </Button>
               <Button 

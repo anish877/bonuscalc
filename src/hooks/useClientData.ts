@@ -140,7 +140,7 @@ export function useClientData() {
 
     // Fetch Clients
     try {
-      const clientsRes = await fetch(`${import.meta.env.VITE_API_URL}/api/clients`);
+      const clientsRes = await fetch(`${import.meta.env.VITE_API_URL}/api/clients`, { credentials: 'include' });
       if (clientsRes.ok) {
          const clientsData = await clientsRes.json();
          const parsedClients = (clientsData as (Client & { onboardingDate: string, overrides: Override[] })[]).map((c) => ({
@@ -368,6 +368,7 @@ export function useClientData() {
           headers: {
             'Content-Type': 'application/json',
           },
+          credentials: 'include',
           body: JSON.stringify(overrideData),
         });
 
