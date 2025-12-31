@@ -70,7 +70,7 @@ export function useClientData() {
 
   const fetchCalculations = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:3000/api/bonus/calculations', { credentials: 'include' });
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/bonus/calculations`, { credentials: 'include' });
       if (response.ok) {
         const data = await response.json();
         const mappedCalculations: ClientBonusCalculation[] = data.map((d: {
@@ -115,7 +115,7 @@ export function useClientData() {
   const fetchBonusHistory = useCallback(async () => {
     setIsHistoryLoading(true);
     try {
-      const response = await fetch('http://localhost:3000/api/bonus/history', { credentials: 'include' });
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/bonus/history`, { credentials: 'include' });
       if (response.ok) {
         const data = await response.json();
         setBonusHistory(data);
@@ -131,7 +131,7 @@ export function useClientData() {
     setIsLoading(true);
     // Fetch Settings
     try {
-      const settingsRes = await fetch('http://localhost:3000/api/settings', { credentials: 'include' });
+      const settingsRes = await fetch(`${import.meta.env.VITE_API_URL}/api/settings`, { credentials: 'include' });
       if (settingsRes.ok) {
         const data = await settingsRes.json();
         setSettings(data);
@@ -140,7 +140,7 @@ export function useClientData() {
 
     // Fetch Clients
     try {
-      const clientsRes = await fetch('http://localhost:3000/api/clients');
+      const clientsRes = await fetch(`${import.meta.env.VITE_API_URL}/api/clients`);
       if (clientsRes.ok) {
          const clientsData = await clientsRes.json();
          const parsedClients = (clientsData as (Client & { onboardingDate: string, overrides: Override[] })[]).map((c) => ({
@@ -157,7 +157,7 @@ export function useClientData() {
 
     // Fetch People
     try {
-      const peopleRes = await fetch('http://localhost:3000/api/people', { credentials: 'include' });
+      const peopleRes = await fetch(`${import.meta.env.VITE_API_URL}/api/people`, { credentials: 'include' });
       if (peopleRes.ok) {
         setPeople(await peopleRes.json());
       }
@@ -179,7 +179,7 @@ export function useClientData() {
   const addClient = useCallback(
     async (data: { name: string; onboardingDate: string | Date; monthlyRevenue?: { month: string; collected: number; isEligible?: boolean }[] }) => {
       try {
-        const response = await fetch('http://localhost:3000/api/clients', {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/clients`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
@@ -204,7 +204,7 @@ export function useClientData() {
 
   const addPerson = useCallback(async (personData: Omit<Person, "id">) => {
     try {
-      const response = await fetch('http://localhost:3000/api/people', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/people`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -228,7 +228,7 @@ export function useClientData() {
 
   const updateSettings = useCallback(async (newSettings: Settings) => {
     try {
-      const response = await fetch('http://localhost:3000/api/settings', {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/settings`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -253,7 +253,7 @@ export function useClientData() {
   const updateClientAllocations = useCallback(
     async (clientId: string, newAllocations: TeamAllocation[]) => {
       try {
-        const response = await fetch(`http://localhost:3000/api/clients/${clientId}/allocations`, {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/clients/${clientId}/allocations`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -315,7 +315,7 @@ export function useClientData() {
   const updateClientRevenue = useCallback(
     async (clientId: string, revenue: { month: string; collected: number; isEligible: boolean }[]) => {
       try {
-        const response = await fetch(`http://localhost:3000/api/clients/${clientId}/revenue`, {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/clients/${clientId}/revenue`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -363,7 +363,7 @@ export function useClientData() {
   const addOverride = useCallback(
     async (overrideData: Omit<Override, "id" | "approvalDate">) => {
       try {
-        const response = await fetch(`http://localhost:3000/api/clients/${overrideData.clientId}/overrides`, {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/clients/${overrideData.clientId}/overrides`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -403,7 +403,7 @@ export function useClientData() {
   const processPayout = useCallback(
     async (clientId: string, period: string) => {
       try {
-        const response = await fetch(`http://localhost:3000/api/clients/${clientId}/payout`, {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/clients/${clientId}/payout`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
