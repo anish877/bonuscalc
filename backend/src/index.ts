@@ -12,7 +12,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:8080'], // Frontend URLs
+  origin: ['http://localhost:5173', 'http://localhost:8080','https://bonuscalc-nu.vercel.app'], // Frontend URLs
   credentials: true, // Allow cookies to be sent
 }));
 app.use(express.json());
