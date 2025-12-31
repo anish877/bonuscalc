@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { ClientBonusCalculation, Person, TeamAllocation, Client, Override } from "@/types/bonus";
-import { formatCurrency, formatPercentage, calculateClientBonus } from "@/lib/bonusCalculations";
-import { X, Calculator, Users, TrendingUp, AlertTriangle, Check, Plus, Trash2, History, FileEdit } from "lucide-react";
+import { formatCurrency, formatPercentage } from "@/lib/bonusCalculations";
+import { X, Calculator, Users, TrendingUp, AlertTriangle, Check, Plus, Trash2, History, FileEdit, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -12,6 +12,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Settings } from "@/types/bonus";
 import { BonusOverrideDialog } from "@/components/BonusOverrideDialog";
 import { OverrideHistory } from "@/components/OverrideHistory";
@@ -25,7 +34,9 @@ interface EditableAllocationPanelProps {
   onClose: () => void;
   onSave: (clientId: string, allocations: TeamAllocation[]) => void;
   onViewHistory: (clientId: string) => void;
+  onEditRevenue: (clientId: string) => void;
   onAddOverride: (override: Omit<Override, "id" | "approvalDate">) => void;
+  onProcessPayout: (clientId: string, period: string) => Promise<unknown>;
 }
 
 export function EditableAllocationPanel({
@@ -37,13 +48,21 @@ export function EditableAllocationPanel({
   onClose,
   onSave,
   onViewHistory,
+  onEditRevenue,
   onAddOverride,
+  onProcessPayout,
 }: EditableAllocationPanelProps) {
   const [localAllocations, setLocalAllocations] = useState<TeamAllocation[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [newMemberId, setNewMemberId] = useState<string>("");
   const [showOverrideDialog, setShowOverrideDialog] = useState(false);
   const [showOverrideHistory, setShowOverrideHistory] = useState(false);
+  const [showPayoutDialog, setShowPayoutDialog] = useState(false);
+  const [payoutPeriod, setPayoutPeriod] = useState<string>(
+    new Date().toISOString().slice(0, 7)
+  );
+  const [isProcessingPayout, setIsProcessingPayout] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (client) {
@@ -59,17 +78,42 @@ export function EditableAllocationPanel({
 
   const isValid = Math.abs(totalWeight - 100) < 0.01;
 
-  // Calculate preview bonuses in real-time
-  const previewCalculation = useMemo(() => {
-    if (!client) return null;
-    const tempClient = { ...client, teamAllocations: localAllocations };
-    return calculateClientBonus(tempClient, settings, people);
-  }, [client, localAllocations, settings, people]);
+  // Calculate preview bonuses in real-time based on backend-provided pool
+  const previewAllocations = useMemo(() => {
+    if (!calculation || !localAllocations.length) return [];
+    
+    // Distribute the known totalBonusPool according to local weights
+    return localAllocations.map(alloc => {
+       const person = people.find(p => p.id === alloc.personId);
+       const bonusAmount = isValid ? calculation.totalBonusPool * (alloc.weight / 100) : 0;
+       return {
+         ...alloc,
+         personName: person?.name ?? "Unknown",
+         bonusAmount
+       };
+    });
+  }, [calculation, localAllocations, people, isValid]);
 
   const availableMembers = useMemo(() => {
     const assignedIds = new Set(localAllocations.map((a) => a.personId));
     return people.filter((p) => !assignedIds.has(p.id));
   }, [people, localAllocations]);
+
+  const effectiveTotalBonus = useMemo(() => {
+    if (!calculation || !localAllocations.length) return 0;
+    
+    return localAllocations.reduce((sum, alloc) => {
+      // Check for override
+      const override = overrides.find(o => o.personId === alloc.personId);
+      if (override) {
+        return sum + override.overrideAmount;
+      }
+      
+      // Calculate standard bonus
+      const bonusAmount = isValid ? calculation.totalBonusPool * (alloc.weight / 100) : 0;
+      return sum + bonusAmount;
+    }, 0);
+  }, [calculation, localAllocations, overrides, isValid]);
 
   if (!calculation || !client) return null;
 
@@ -91,16 +135,34 @@ export function EditableAllocationPanel({
     setLocalAllocations((prev) => prev.filter((a) => a.personId !== personId));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (isValid) {
-      onSave(client.id, localAllocations);
-      setIsEditing(false);
+      setIsSaving(true);
+      try {
+        await onSave(client.id, localAllocations);
+        setIsEditing(false);
+      } finally {
+        setIsSaving(false);
+      }
     }
   };
 
   const handleCancel = () => {
     setLocalAllocations([...client.teamAllocations]);
     setIsEditing(false);
+  };
+
+  const handleProcessPayout = async () => {
+    if (!client) return;
+    setIsProcessingPayout(true);
+    try {
+      await onProcessPayout(client.id, payoutPeriod);
+      setShowPayoutDialog(false);
+    } catch (error) {
+      // Error is logged in hook
+    } finally {
+      setIsProcessingPayout(false);
+    }
   };
 
   return (
@@ -161,9 +223,31 @@ export function EditableAllocationPanel({
 
         {/* Revenue Summary */}
         <div>
-          <div className="flex items-center gap-2 mb-3">
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            <h3 className="font-medium">Revenue Summary</h3>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <h3 className="font-medium">Revenue Summary</h3>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="default" 
+                size="default" 
+                className="gap-1 bg-primary text-primary-foreground hover:bg-primary/90 shadow-md"
+                onClick={() => setShowPayoutDialog(true)}
+                disabled={!calculation.isEligible}
+              >
+                <DollarSign className="h-4 w-4" />
+                Payout
+              </Button>
+              <Button 
+                variant="default" 
+                size="default" 
+                className="bg-success text-success-foreground hover:bg-success/90 shadow-sm"
+                onClick={() => onEditRevenue(client.id)}
+              >
+                Update Revenue
+              </Button>
+            </div>
           </div>
           <div className="space-y-3 bg-muted/50 rounded-lg p-4">
             <div className="flex justify-between text-sm">
@@ -205,7 +289,7 @@ export function EditableAllocationPanel({
             <div className="flex justify-between items-center pt-2 border-t border-border">
               <span className="font-medium">Total Bonus Pool</span>
               <span className="text-xl font-bold text-success">
-                {formatCurrency(previewCalculation?.totalBonusPool ?? calculation.totalBonusPool)}
+                {formatCurrency(calculation.totalBonusPool)}
               </span>
             </div>
           </div>
@@ -230,17 +314,22 @@ export function EditableAllocationPanel({
                     <FileEdit className="h-4 w-4" />
                     Override
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                    Edit Weights
+                  <Button 
+                    size="sm" 
+                    onClick={() => setIsEditing(true)}
+                    className="gap-1 bg-success text-success-foreground hover:bg-success/90"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add Member & Edit Weight
                   </Button>
                 </>
               ) : (
                 <>
-                  <Button variant="ghost" size="sm" onClick={handleCancel}>
+                  <Button variant="ghost" size="sm" onClick={handleCancel} disabled={isSaving}>
                     Cancel
                   </Button>
-                  <Button size="sm" onClick={handleSave} disabled={!isValid}>
-                    Save Changes
+                  <Button size="sm" onClick={handleSave} disabled={!isValid || isSaving}>
+                    {isSaving ? "Saving..." : "Save Changes"}
                   </Button>
                 </>
               )}
@@ -250,7 +339,7 @@ export function EditableAllocationPanel({
           <div className="space-y-2">
             {localAllocations.map((allocation) => {
               const person = people.find((p) => p.id === allocation.personId);
-              const previewAlloc = previewCalculation?.allocations.find(
+              const previewAlloc = previewAllocations.find(
                 (a) => a.personId === allocation.personId
               );
               const override = overrides.find((o) => o.personId === allocation.personId);
@@ -387,10 +476,56 @@ export function EditableAllocationPanel({
         onOpenChange={setShowOverrideDialog}
         clientId={client.id}
         clientName={client.name}
-        allocations={previewCalculation?.allocations ?? calculation.allocations}
+        allocations={previewAllocations}
         existingOverrides={overrides}
         onSubmitOverride={onAddOverride}
       />
+
+      {/* Payout Dialog */}
+      <Dialog open={showPayoutDialog} onOpenChange={setShowPayoutDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Process Bonus Payout</DialogTitle>
+            <DialogDescription>
+              Confirm the payout details for {client.name}. This will record the payout in the history.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="period" className="text-right">
+                Month
+              </Label>
+              <Input
+                id="period"
+                type="month"
+                value={payoutPeriod}
+                onChange={(e) => setPayoutPeriod(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Total Payout</Label>
+              <div className="col-span-3 font-semibold text-lg text-success">
+                {formatCurrency(effectiveTotalBonus)}
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPayoutDialog(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleProcessPayout} 
+              disabled={isProcessingPayout}
+            >
+              {isProcessingPayout ? "Processing..." : "Confirm Payout"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

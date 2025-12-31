@@ -29,7 +29,7 @@ interface BonusOverrideDialogProps {
   clientName: string;
   allocations: IndividualAllocation[];
   existingOverrides: Override[];
-  onSubmitOverride: (override: Omit<Override, "id" | "approvalDate">) => void;
+  onSubmitOverride: (override: Omit<Override, "id" | "approvalDate">) => Promise<void> | void;
 }
 
 export function BonusOverrideDialog({
@@ -45,30 +45,38 @@ export function BonusOverrideDialog({
   const [overrideAmount, setOverrideAmount] = useState("");
   const [reason, setReason] = useState("");
   const [approvedBy, setApprovedBy] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedAllocation = allocations.find((a) => a.personId === selectedPersonId);
   const existingOverride = existingOverrides.find(
     (o) => o.clientId === clientId && o.personId === selectedPersonId
   );
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!selectedPersonId || !overrideAmount || !reason || !approvedBy) return;
 
-    onSubmitOverride({
-      clientId,
-      personId: selectedPersonId,
-      originalAmount: selectedAllocation?.bonusAmount ?? 0,
-      overrideAmount: parseFloat(overrideAmount),
-      reason,
-      approvedBy,
-    });
+    setIsSubmitting(true);
+    try {
+      await onSubmitOverride({
+        clientId,
+        personId: selectedPersonId,
+        originalAmount: selectedAllocation?.bonusAmount ?? 0,
+        overrideAmount: parseFloat(overrideAmount),
+        reason,
+        approvedBy,
+      });
 
-    // Reset form
-    setSelectedPersonId("");
-    setOverrideAmount("");
-    setReason("");
-    setApprovedBy("");
-    onOpenChange(false);
+      // Reset form
+      setSelectedPersonId("");
+      setOverrideAmount("");
+      setReason("");
+      setApprovedBy("");
+      onOpenChange(false);
+    } catch (error) {
+      console.error("Failed to submit override", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const isValid = selectedPersonId && overrideAmount && reason && approvedBy;
@@ -156,11 +164,11 @@ export function BonusOverrideDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={!isValid}>
-            Submit Override
+          <Button onClick={handleSubmit} disabled={!isValid || isSubmitting}>
+            {isSubmitting ? "Submitting..." : "Submit Override"}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,7 +1,14 @@
-import { useState, useCallback, useMemo } from "react";
-import { Client, Person, Settings, TeamAllocation, BonusHistoryRecord, AllocationChange, Override } from "@/types/bonus";
-import { mockClients, mockPeople, mockSettings, mockOverrides } from "@/data/mockData";
-import { calculateAllBonuses, calculateClientBonus } from "@/lib/bonusCalculations";
+import { useState, useCallback, useMemo, useEffect } from "react";
+import { Client, Person, Settings, TeamAllocation, BonusHistoryRecord, AllocationChange, Override, ClientBonusCalculation } from "@/types/bonus";
+
+const defaultSettings: Settings = {
+  companyExpensePercentage: 0,
+  bonusPoolMinPercentage: 0,
+  bonusPoolMaxPercentage: 0,
+  payoutFrequency: "Quarterly",
+  minEligibilityMonths: 3,
+  bonusSlabs: [],
+};
 
 // Generate 6-month payout cycle ID (e.g., "2024-H1" for Jan-Jun, "2024-H2" for Jul-Dec)
 function getPayoutCycleId(date: Date): string {
@@ -12,161 +19,334 @@ function getPayoutCycleId(date: Date): string {
 }
 
 function getPayoutCycleLabel(cycleId: string): string {
-  const [year, half] = cycleId.split("-");
-  if (half === "H1") {
-    return `Jan - Jun ${year}`;
-  }
-  return `Jul - Dec ${year}`;
-}
-
-function getCycleStartDate(cycleId: string): Date {
-  const [year, half] = cycleId.split("-");
-  const month = half === "H1" ? 0 : 6;
-  return new Date(parseInt(year), month, 1);
-}
-
-// Generate bonus history for 6-month payout cycles
-function generateInitialHistory(
-  clients: Client[],
-  settings: Settings,
-  people: Person[]
-): BonusHistoryRecord[] {
-  const history: BonusHistoryRecord[] = [];
-  const calculations = calculateAllBonuses(clients, settings, people);
-  
-  const now = new Date();
-  const currentCycle = getPayoutCycleId(now);
-  
-  // Generate last 3 payout cycles (current + 2 previous = 18 months of history)
-  const cycles: string[] = [];
-  for (let i = 0; i < 3; i++) {
-    const cycleDate = new Date(now.getFullYear(), now.getMonth() - (i * 6), 1);
-    const cycleId = getPayoutCycleId(cycleDate);
-    if (!cycles.includes(cycleId)) {
-      cycles.push(cycleId);
+  const parts = cycleId.split("-");
+  if (parts.length === 2) {
+    const [year, suffix] = parts;
+    
+    // Handle H1/H2 legacy format
+    if (suffix === "H1") return `Jan - Jun ${year}`;
+    if (suffix === "H2") return `Jul - Dec ${year}`;
+    
+    // Handle YYYY-MM format
+    const month = parseInt(suffix);
+    if (!isNaN(month) && month >= 1 && month <= 12) {
+      const date = new Date(parseInt(year), month - 1);
+      return date.toLocaleString('default', { month: 'long', year: 'numeric' });
     }
   }
   
-  cycles.forEach(cycleId => {
-    const cycleStartDate = getCycleStartDate(cycleId);
-    
-    calculations.forEach(calc => {
-      calc.allocations.forEach(alloc => {
-        history.push({
-          id: `${cycleId}-${calc.clientId}-${alloc.personId}`,
-          period: cycleId,
-          calculatedAt: cycleStartDate,
-          clientId: calc.clientId,
-          clientName: calc.clientName,
-          personId: alloc.personId,
-          personName: alloc.personName,
-          weight: alloc.weight,
-          bonusAmount: alloc.bonusAmount,
-          totalClientBonus: calc.totalBonusPool,
-          averageMonthlyRevenue: calc.averageMonthlyRevenue,
-          appliedBonusPercentage: calc.appliedBonusPercentage,
-        });
-      });
-    });
-  });
-  
-  return history;
+  return cycleId;
 }
 
-export { getPayoutCycleLabel };
+function getCycleStartDate(cycleId: string): Date {
+  const parts = cycleId.split("-");
+  if (parts.length === 2) {
+    const [yearStr, suffix] = parts;
+    const year = parseInt(yearStr);
+    
+    if (suffix === "H1") return new Date(year, 0, 1); // Jan 1
+    if (suffix === "H2") return new Date(year, 6, 1); // Jul 1
+    
+    const month = parseInt(suffix);
+    if (!isNaN(month) && month >= 1 && month <= 12) {
+      return new Date(year, month - 1, 1);
+    }
+  }
+  return new Date(); // Fallback
+}
+
+export { getPayoutCycleLabel, getCycleStartDate };
 
 export function useClientData() {
-  const [clients, setClients] = useState<Client[]>(mockClients);
-  const [people] = useState<Person[]>(mockPeople);
-  const [settings] = useState<Settings>(mockSettings);
-  const [bonusHistory, setBonusHistory] = useState<BonusHistoryRecord[]>(() =>
-    generateInitialHistory(mockClients, mockSettings, mockPeople)
-  );
+  const [clients, setClients] = useState<Client[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
+  const [settings, setSettings] = useState<Settings>(defaultSettings);
+  const [bonusHistory, setBonusHistory] = useState<BonusHistoryRecord[]>([]);
   const [allocationChanges, setAllocationChanges] = useState<AllocationChange[]>([]);
-  const [overrides, setOverrides] = useState<Override[]>(mockOverrides);
+  const [overrides, setOverrides] = useState<Override[]>([]);
+  const [calculations, setCalculations] = useState<ClientBonusCalculation[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
-  const calculations = useMemo(
-    () => calculateAllBonuses(clients, settings, people),
-    [clients, settings, people]
+  const fetchCalculations = useCallback(async () => {
+    try {
+      const response = await fetch('http://localhost:3000/api/bonus/calculations', { credentials: 'include' });
+      if (response.ok) {
+        const data = await response.json();
+        const mappedCalculations: ClientBonusCalculation[] = data.map((d: {
+          clientId: string;
+          clientName: string;
+          isEligible: boolean;
+          eligibilityReason?: string;
+          monthsConsidered: number;
+          totalRevenue: number;
+          averageMonthlyRevenue: number;
+          netRevenue: number;
+          bonusPercentage: number;
+          bonusPool: number;
+          allocations: { personId: string; personName: string; weight: number; bonusAmount: number }[];
+        }) => ({
+          clientId: d.clientId,
+          clientName: d.clientName,
+          isEligible: d.isEligible,
+          eligibilityReason: d.eligibilityReason,
+          eligibleMonths: d.monthsConsidered,
+          totalRevenue: d.totalRevenue,
+          averageMonthlyRevenue: d.averageMonthlyRevenue,
+          expenseDeduction: d.averageMonthlyRevenue - d.netRevenue,
+          netRevenue: d.netRevenue,
+          appliedBonusPercentage: d.bonusPercentage,
+          totalBonusPool: d.bonusPool,
+          allocations: d.allocations.map((a) => ({
+             personId: a.personId,
+             personName: a.personName,
+             weight: a.weight,
+             bonusAmount: a.bonusAmount
+          })),
+          isWeightValid: true
+        }));
+        setCalculations(mappedCalculations);
+      }
+    } catch (e) {
+      console.error('Failed to fetch calculations:', e);
+    }
+  }, []);
+
+  const fetchBonusHistory = useCallback(async () => {
+    setIsHistoryLoading(true);
+    try {
+      const response = await fetch('http://localhost:3000/api/bonus/history', { credentials: 'include' });
+      if (response.ok) {
+        const data = await response.json();
+        setBonusHistory(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch bonus history:', e);
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  }, []);
+
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    // Fetch Settings
+    try {
+      const settingsRes = await fetch('http://localhost:3000/api/settings', { credentials: 'include' });
+      if (settingsRes.ok) {
+        const data = await settingsRes.json();
+        setSettings(data);
+      }
+    } catch (e) { console.error('Failed to fetch settings:', e); }
+
+    // Fetch Clients
+    try {
+      const clientsRes = await fetch('http://localhost:3000/api/clients');
+      if (clientsRes.ok) {
+         const clientsData = await clientsRes.json();
+         const parsedClients = (clientsData as (Client & { onboardingDate: string, overrides: Override[] })[]).map((c) => ({
+           ...c,
+           onboardingDate: new Date(c.onboardingDate),
+         }));
+         setClients(parsedClients);
+         
+         // Extract and set overrides
+         const allOverrides = parsedClients.flatMap(c => c.overrides || []);
+         setOverrides(allOverrides);
+      }
+    } catch (e) { console.error('Failed to fetch clients:', e); }
+
+    // Fetch People
+    try {
+      const peopleRes = await fetch('http://localhost:3000/api/people', { credentials: 'include' });
+      if (peopleRes.ok) {
+        setPeople(await peopleRes.json());
+      }
+    } catch (e) { console.error('Failed to fetch people:', e); }
+
+    // Fetch Calculations
+    await fetchCalculations();
+
+    // Fetch Bonus History
+    await fetchBonusHistory();
+
+    setIsLoading(false);
+  }, [fetchCalculations, fetchBonusHistory]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const addClient = useCallback(
+    async (data: { name: string; onboardingDate: string | Date; monthlyRevenue?: { month: string; collected: number; isEligible?: boolean }[] }) => {
+      try {
+        const response = await fetch('http://localhost:3000/api/clients', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            name: data.name,
+            onboardingDate: data.onboardingDate,
+          }),
+        });
+        
+        if (response.ok) {
+          const newClient = await response.json();
+          // Ideally we re-fetch to get consistent state
+          fetchData();
+          return newClient;
+        }
+      } catch (error) {
+        console.error('Error adding client:', error);
+      }
+    },
+    [fetchData]
   );
+
+  const addPerson = useCallback(async (personData: Omit<Person, "id">) => {
+    try {
+      const response = await fetch('http://localhost:3000/api/people', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(personData),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create person');
+      }
+
+      const newPerson = await response.json();
+      setPeople((prev) => [...prev, newPerson]);
+      fetchCalculations(); // Recalculate as weights/allocations might change if we auto-assign?
+    } catch (error) {
+      console.error('Error adding person:', error);
+      throw error;
+    }
+  }, [fetchCalculations]);
+
+  const updateSettings = useCallback(async (newSettings: Settings) => {
+    try {
+      const response = await fetch('http://localhost:3000/api/settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(newSettings),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update settings');
+      }
+
+      const updatedSettings = await response.json();
+      setSettings(updatedSettings);
+      fetchCalculations(); // Settings change affects calculations
+    } catch (error) {
+      console.error('Error updating settings:', error);
+      throw error;
+    }
+  }, [fetchCalculations]);
 
   const updateClientAllocations = useCallback(
-    (clientId: string, newAllocations: TeamAllocation[]) => {
-      setClients((prev) => {
-        const client = prev.find((c) => c.id === clientId);
-        if (!client) return prev;
-
-        // Record changes
-        const changes: AllocationChange[] = [];
-        newAllocations.forEach((newAlloc) => {
-          const oldAlloc = client.teamAllocations.find(
-            (a) => a.personId === newAlloc.personId
-          );
-          if (oldAlloc && oldAlloc.weight !== newAlloc.weight) {
-            changes.push({
-              id: `change-${Date.now()}-${newAlloc.personId}`,
-              clientId,
-              personId: newAlloc.personId,
-              previousWeight: oldAlloc.weight,
-              newWeight: newAlloc.weight,
-              changedAt: new Date(),
-              changedBy: "Current User",
-            });
-          }
+    async (clientId: string, newAllocations: TeamAllocation[]) => {
+      try {
+        const response = await fetch(`http://localhost:3000/api/clients/${clientId}/allocations`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ allocations: newAllocations }),
         });
 
-        if (changes.length > 0) {
-          setAllocationChanges((prev) => [...changes, ...prev]);
+        if (!response.ok) {
+          throw new Error('Failed to update allocations');
         }
 
-        return prev.map((c) =>
-          c.id === clientId ? { ...c, teamAllocations: newAllocations } : c
-        );
-      });
-    },
-    []
-  );
+        // Optimistic update for UI responsiveness
+        setClients((prev) => {
+          const client = prev.find((c) => c.id === clientId);
+          if (!client) return prev;
 
-  const addTeamMember = useCallback(
-    (clientId: string, personId: string, weight: number) => {
-      setClients((prev) =>
-        prev.map((c) => {
-          if (c.id !== clientId) return c;
-          if (c.teamAllocations.some((a) => a.personId === personId)) return c;
-          return {
-            ...c,
-            teamAllocations: [...c.teamAllocations, { personId, weight }],
-          };
-        })
-      );
-    },
-    []
-  );
+          const changes: AllocationChange[] = [];
+          newAllocations.forEach((newAlloc) => {
+            const oldAlloc = client.teamAllocations.find(
+              (a) => a.personId === newAlloc.personId
+            );
+            if (oldAlloc && oldAlloc.weight !== newAlloc.weight) {
+              changes.push({
+                id: `change-${Date.now()}-${newAlloc.personId}`,
+                clientId,
+                personId: newAlloc.personId,
+                previousWeight: oldAlloc.weight,
+                newWeight: newAlloc.weight,
+                changedAt: new Date(),
+                changedBy: "Current User",
+              });
+            }
+          });
 
-  const removeTeamMember = useCallback((clientId: string, personId: string) => {
-    setClients((prev) =>
-      prev.map((c) => {
-        if (c.id !== clientId) return c;
-        return {
-          ...c,
-          teamAllocations: c.teamAllocations.filter(
-            (a) => a.personId !== personId
-          ),
-        };
-      })
-    );
-  }, []);
+          if (changes.length > 0) {
+            setAllocationChanges((prev) => [...changes, ...prev]);
+          }
+
+          return prev.map((c) =>
+            c.id === clientId ? { ...c, teamAllocations: newAllocations } : c
+          );
+        });
+
+        // Fetch fresh calculations
+        fetchCalculations();
+        
+      } catch (error) {
+        console.error('Error updating allocations:', error);
+      }
+    },
+    [fetchCalculations]
+  );
 
   const getClientById = useCallback(
     (clientId: string) => clients.find((c) => c.id === clientId),
     [clients]
   );
 
+  const updateClientRevenue = useCallback(
+    async (clientId: string, revenue: { month: string; collected: number; isEligible: boolean }[]) => {
+      try {
+        const response = await fetch(`http://localhost:3000/api/clients/${clientId}/revenue`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ revenue }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update revenue');
+        }
+
+        setClients((prev) =>
+          prev.map((c) =>
+            c.id === clientId ? { ...c, monthlyRevenue: revenue } : c
+          )
+        );
+        
+        // Fetch fresh calculations
+        fetchCalculations();
+      } catch (error) {
+        console.error('Error updating revenue:', error);
+      }
+    },
+    [fetchCalculations]
+  );
+
   const getPersonBonusHistory = useCallback(
     (personId: string) => {
       return bonusHistory
         .filter((h) => h.personId === personId)
-        .sort((a, b) => new Date(b.period).getTime() - new Date(a.period).getTime());
+        .sort((a, b) => getCycleStartDate(b.period).getTime() - getCycleStartDate(a.period).getTime());
     },
     [bonusHistory]
   );
@@ -175,32 +355,80 @@ export function useClientData() {
     (clientId: string) => {
       return bonusHistory
         .filter((h) => h.clientId === clientId)
-        .sort((a, b) => new Date(b.period).getTime() - new Date(a.period).getTime());
+        .sort((a, b) => getCycleStartDate(b.period).getTime() - getCycleStartDate(a.period).getTime());
     },
     [bonusHistory]
   );
 
   const addOverride = useCallback(
-    (overrideData: Omit<Override, "id" | "approvalDate">) => {
-      const newOverride: Override = {
-        ...overrideData,
-        id: `override-${Date.now()}`,
-        approvalDate: new Date(),
-      };
-      setOverrides((prev) => {
-        // Remove existing override for same client/person if exists
-        const filtered = prev.filter(
-          (o) => !(o.clientId === overrideData.clientId && o.personId === overrideData.personId)
-        );
-        return [newOverride, ...filtered];
-      });
+    async (overrideData: Omit<Override, "id" | "approvalDate">) => {
+      try {
+        const response = await fetch(`http://localhost:3000/api/clients/${overrideData.clientId}/overrides`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(overrideData),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to create override');
+        }
+
+        const newOverride = await response.json();
+        
+        // Update local state
+        setOverrides((prev) => {
+          const filtered = prev.filter(
+            (o) => !(o.clientId === overrideData.clientId && o.personId === overrideData.personId)
+          );
+          return [newOverride, ...filtered];
+        });
+        
+        // Refresh calculations to reflect override
+        fetchCalculations();
+        
+      } catch (error) {
+        console.error('Error adding override:', error);
+      }
     },
-    []
+    [fetchCalculations]
   );
 
   const getClientOverrides = useCallback(
     (clientId: string) => overrides.filter((o) => o.clientId === clientId),
     [overrides]
+  );
+
+  const processPayout = useCallback(
+    async (clientId: string, period: string) => {
+      try {
+        const response = await fetch(`http://localhost:3000/api/clients/${clientId}/payout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({ period }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to process payout');
+        }
+
+        const result = await response.json();
+        
+        // Refresh history and calculations
+        fetchData();
+        
+        return result;
+      } catch (error) {
+        console.error('Error processing payout:', error);
+        throw error;
+      }
+    },
+    [fetchData]
   );
 
   return {
@@ -211,13 +439,19 @@ export function useClientData() {
     bonusHistory,
     allocationChanges,
     overrides,
+    addClient,
+    addPerson,
+    updateSettings,
     updateClientAllocations,
-    addTeamMember,
-    removeTeamMember,
+    updateClientRevenue,
     getClientById,
     getPersonBonusHistory,
     getClientBonusHistory,
     addOverride,
     getClientOverrides,
+    processPayout,
+    fetchBonusHistory,
+    isLoading,
+    isHistoryLoading,
   };
 }

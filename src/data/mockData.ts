@@ -14,11 +14,11 @@ const generateMonths = (count: number): string[] => {
 const months = generateMonths(8);
 
 export const mockPeople: Person[] = [
-  { id: "p1", name: "Sarah Chen", email: "sarah@company.com", role: "Account Manager", avatarUrl: "" },
-  { id: "p2", name: "Marcus Johnson", email: "marcus@company.com", role: "Senior Developer", avatarUrl: "" },
-  { id: "p3", name: "Emily Rodriguez", email: "emily@company.com", role: "Project Lead", avatarUrl: "" },
-  { id: "p4", name: "David Kim", email: "david@company.com", role: "Developer", avatarUrl: "" },
-  { id: "p5", name: "Lisa Thompson", email: "lisa@company.com", role: "Designer", avatarUrl: "" },
+  { id: "p1", name: "Sarah Chen", email: "sarah@company.com", role: "Account Manager", avatarUrl: "", defaultBonusWeight: 10 },
+  { id: "p2", name: "Marcus Johnson", email: "marcus@company.com", role: "Senior Developer", avatarUrl: "", defaultBonusWeight: 20 },
+  { id: "p3", name: "Emily Rodriguez", email: "emily@company.com", role: "Project Lead", avatarUrl: "", defaultBonusWeight: 25 },
+  { id: "p4", name: "David Kim", email: "david@company.com", role: "Developer", avatarUrl: "", defaultBonusWeight: 15 },
+  { id: "p5", name: "Lisa Thompson", email: "lisa@company.com", role: "Designer", avatarUrl: "", defaultBonusWeight: 15 },
 ];
 
 export const mockClients: Client[] = [
@@ -26,6 +26,7 @@ export const mockClients: Client[] = [
     id: "c1",
     name: "TechCorp Industries",
     onboardingDate: new Date("2024-01-15"),
+    status: "Active",
     monthlyRevenue: [
       { month: months[0], collected: 8500, isEligible: true },
       { month: months[1], collected: 9200, isEligible: true },
@@ -44,6 +45,7 @@ export const mockClients: Client[] = [
     id: "c2",
     name: "Global Finance Ltd",
     onboardingDate: new Date("2024-03-01"),
+    status: "Active",
     monthlyRevenue: [
       { month: months[0], collected: 4200, isEligible: true },
       { month: months[1], collected: 4500, isEligible: true },
@@ -61,6 +63,7 @@ export const mockClients: Client[] = [
     id: "c3",
     name: "Innovate Solutions",
     onboardingDate: new Date("2024-06-01"),
+    status: "Active",
     monthlyRevenue: [
       { month: months[0], collected: 12500, isEligible: true },
       { month: months[1], collected: 11800, isEligible: true },
@@ -80,6 +83,7 @@ export const mockClients: Client[] = [
     id: "c4",
     name: "StartUp Labs",
     onboardingDate: new Date("2024-08-15"),
+    status: "Inactive",
     monthlyRevenue: [
       { month: months[0], collected: 2800, isEligible: true },
       { month: months[1], collected: 3200, isEligible: true },
@@ -95,6 +99,7 @@ export const mockClients: Client[] = [
     id: "c5",
     name: "Enterprise Co",
     onboardingDate: new Date("2024-02-01"),
+    status: "Active",
     monthlyRevenue: [
       { month: months[0], collected: 6800, isEligible: true },
       { month: months[1], collected: 7200, isEligible: true },
@@ -113,6 +118,10 @@ export const mockClients: Client[] = [
 
 export const mockSettings: Settings = {
   companyExpensePercentage: 40,
+  bonusPoolMinPercentage: 10,
+  bonusPoolMaxPercentage: 20,
+  payoutFrequency: "Quarterly",
+  minEligibilityMonths: 3,
   bonusSlabs: [
     { id: "slab1", minRevenue: 0, maxRevenue: 5000, bonusPercentage: 20 },
     { id: "slab2", minRevenue: 5001, maxRevenue: null, bonusPercentage: 10 },

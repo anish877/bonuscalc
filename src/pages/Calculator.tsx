@@ -1,9 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { SectionHeader } from "@/components/SectionHeader";
-import { mockClients, mockPeople, mockSettings } from "@/data/mockData";
+import { useClientData } from "@/hooks/useClientData";
 import {
-  calculateAllBonuses,
   formatCurrency,
   formatPercentage,
 } from "@/lib/bonusCalculations";
@@ -15,18 +14,40 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Calculator, ArrowRight, DollarSign, Percent, Building2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const CalculatorPage = () => {
-  const [selectedClientId, setSelectedClientId] = useState<string>(
-    mockClients[0]?.id ?? ""
-  );
+  const { clients, calculations, isLoading } = useClientData();
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
 
-  const calculations = useMemo(
-    () => calculateAllBonuses(mockClients, mockSettings, mockPeople),
-    []
-  );
+  useEffect(() => {
+    if (clients.length > 0 && !selectedClientId) {
+      setSelectedClientId(clients[0].id);
+    }
+  }, [clients, selectedClientId]);
 
   const selectedCalc = calculations.find((c) => c.clientId === selectedClientId);
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="space-y-8">
+          <SectionHeader
+            title="Bonus Calculator"
+            description="Step-by-step bonus calculation breakdown"
+          />
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-10 w-72" />
+          </div>
+          <div className="grid gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-48 w-full" />
+            ))}
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   if (!selectedCalc) {
     return (
@@ -54,7 +75,7 @@ const CalculatorPage = () => {
               <SelectValue placeholder="Select client" />
             </SelectTrigger>
             <SelectContent>
-              {mockClients.map((client) => (
+              {clients.map((client) => (
                 <SelectItem key={client.id} value={client.id}>
                   {client.name}
                 </SelectItem>

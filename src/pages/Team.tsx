@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { AddMemberPanel } from "@/components/AddMemberPanel";
 import { Layout } from "@/components/Layout";
 import { SectionHeader } from "@/components/SectionHeader";
 import { TeamTable } from "@/components/TeamTable";
@@ -18,8 +19,9 @@ import {
 const Team = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
+  const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
 
-  const { people, calculations, bonusHistory, getPersonBonusHistory } = useClientData();
+  const { people, calculations, bonusHistory, getPersonBonusHistory, addPerson, fetchBonusHistory, isLoading, isHistoryLoading } = useClientData();
 
   const filteredPeople = useMemo(() => {
     if (!searchQuery) return people;
@@ -35,6 +37,13 @@ const Team = () => {
     : null;
 
   const personHistory = selectedPersonId ? getPersonBonusHistory(selectedPersonId) : [];
+
+  useEffect(() => {
+    if (selectedPersonId) {
+      // Refresh history when drawer opens
+      fetchBonusHistory();
+    }
+  }, [selectedPersonId, fetchBonusHistory]);
 
   return (
     <Layout>
@@ -60,7 +69,7 @@ const Team = () => {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button className="gap-2">
+              <Button className="gap-2" onClick={() => setIsAddMemberOpen(true)}>
                 <Plus className="h-4 w-4" />
                 Add Member
               </Button>
@@ -84,6 +93,7 @@ const Team = () => {
           people={filteredPeople}
           calculations={calculations}
           onPersonClick={setSelectedPersonId}
+          isLoading={isLoading}
         />
       </div>
 
@@ -92,13 +102,24 @@ const Team = () => {
         person={selectedPerson}
         history={personHistory}
         onClose={() => setSelectedPersonId(null)}
+        isLoading={isHistoryLoading}
+      />
+
+      {/* Add Member Panel */}
+      <AddMemberPanel
+        isOpen={isAddMemberOpen}
+        onClose={() => setIsAddMemberOpen(false)}
+        onSave={addPerson}
       />
 
       {/* Overlay */}
-      {selectedPersonId && (
+      {(selectedPersonId || isAddMemberOpen) && (
         <div
           className="fixed inset-0 bg-foreground/10 z-40"
-          onClick={() => setSelectedPersonId(null)}
+          onClick={() => {
+            setSelectedPersonId(null);
+            setIsAddMemberOpen(false);
+          }}
         />
       )}
     </Layout>

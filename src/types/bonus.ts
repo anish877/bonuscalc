@@ -2,6 +2,7 @@ export interface Client {
   id: string;
   name: string;
   onboardingDate: Date;
+  status: 'Active' | 'Inactive';
   monthlyRevenue: MonthlyRevenue[];
   teamAllocations: TeamAllocation[];
 }
@@ -22,6 +23,7 @@ export interface Person {
   name: string;
   email: string;
   role: string;
+  defaultBonusWeight?: number;
   avatarUrl?: string;
 }
 
@@ -34,12 +36,18 @@ export interface BonusSlab {
 
 export interface Settings {
   companyExpensePercentage: number;
+  bonusPoolMinPercentage: number;
+  bonusPoolMaxPercentage: number;
+  payoutFrequency: string;
+  minEligibilityMonths: number;
   bonusSlabs: BonusSlab[];
 }
 
 export interface ClientBonusCalculation {
   clientId: string;
   clientName: string;
+  isEligible: boolean;
+  eligibilityReason?: string;
   eligibleMonths: number;
   totalRevenue: number;
   averageMonthlyRevenue: number;

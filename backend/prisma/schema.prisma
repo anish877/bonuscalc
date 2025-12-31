@@ -1,0 +1,124 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id              String            @id @default(uuid())
+  name            String
+  onboardingDate  DateTime
+  status          String            @default("Active") // Active, Inactive
+  monthlyRevenue  MonthlyRevenue[]
+  teamAllocations TeamAllocation[]
+  overrides       Override[]
+  bonusHistory    BonusHistoryRecord[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model MonthlyRevenue {
+  id         String   @id @default(uuid())
+  clientId   String
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  month      String   // YYYY-MM format
+  collected  Float
+  isEligible Boolean
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([clientId, month])
+}
+
+model Person {
+  id                 String           @id @default(uuid())
+  name               String
+  email              String           @unique
+  role               String           // Dev, Design, Content, PM
+  defaultBonusWeight Float?           // Role-based or custom default weight
+  avatarUrl          String?
+  teamAllocations    TeamAllocation[]
+  overrides          Override[]
+  bonusHistory       BonusHistoryRecord[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+}
+
+model TeamAllocation {
+  id        String   @id @default(uuid())
+  clientId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  personId  String
+  person    Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  weight    Float    // 0-100 percentage
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([clientId, personId])
+}
+
+model BonusSlab {
+  id              String   @id @default(uuid())
+  minRevenue      Float
+  maxRevenue      Float?
+  bonusPercentage Float
+  settingsId      String?
+  settings        Settings? @relation(fields: [settingsId], references: [id])
+}
+
+model Settings {
+  id                       String      @id @default(uuid())
+  companyExpensePercentage Float       @default(40)
+  bonusPoolMinPercentage   Float       @default(10)
+  bonusPoolMaxPercentage   Float       @default(20)
+  payoutFrequency          String      @default("Quarterly")
+  minEligibilityMonths     Int         @default(3)
+  bonusSlabs               BonusSlab[]
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
+}
+
+model Override {
+  id             String   @id @default(uuid())
+  clientId       String
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  personId       String?
+  person         Person?  @relation(fields: [personId], references: [id])
+  originalAmount Float
+  overrideAmount Float
+  reason         String
+  approvedBy     String
+  approvalDate   DateTime
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         String   @default("ADMIN") // ADMIN, MANAGER
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model BonusHistoryRecord {
+  id                    String   @id @default(uuid())
+  period                String   // YYYY-MM format for the calculation period
+  calculatedAt          DateTime @default(now())
+  clientId              String
+  client                Client   @relation(fields: [clientId], references: [id])
+  personId              String
+  person                Person   @relation(fields: [personId], references: [id])
+  weight                Float
+  bonusAmount           Float
+  totalClientBonus      Float
+  averageMonthlyRevenue Float
+  appliedBonusPercentage Float
+}

@@ -29,6 +29,9 @@ const Dashboard = () => {
     getPersonBonusHistory,
     addOverride,
     getClientOverrides,
+    processPayout,
+    isLoading,
+    isHistoryLoading,
   } = useClientData();
 
   const selectedClientOverrides = selectedClientId ? getClientOverrides(selectedClientId) : [];
@@ -123,6 +126,7 @@ const Dashboard = () => {
             <ClientTable
               calculations={calculations}
               onClientClick={setSelectedClientId}
+              isLoading={isLoading}
             />
           </TabsContent>
 
@@ -135,6 +139,7 @@ const Dashboard = () => {
               people={people}
               calculations={calculations}
               onPersonClick={setSelectedPersonId}
+              isLoading={isLoading}
             />
           </TabsContent>
         </Tabs>
@@ -150,7 +155,9 @@ const Dashboard = () => {
         onClose={() => setSelectedClientId(null)}
         onSave={updateClientAllocations}
         onViewHistory={() => {}}
+        onEditRevenue={() => {}} // No-op for dashboard for now
         onAddOverride={addOverride}
+        onProcessPayout={processPayout}
       />
 
       {/* Person History Panel */}
@@ -158,6 +165,7 @@ const Dashboard = () => {
         person={selectedPerson}
         history={personHistory}
         onClose={() => setSelectedPersonId(null)}
+        isLoading={isHistoryLoading}
       />
 
       {/* Overlay when panel is open */}
