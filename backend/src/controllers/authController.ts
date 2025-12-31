@@ -24,11 +24,14 @@ export const loginUser = async (req: Request, res: Response) => {
     if (user && (await bcrypt.compare(password, user.passwordHash))) {
       const token = generateToken(user.id);
 
+      // Determine environment
+      const isProduction = process.env.NODE_ENV === 'production';
+
       // Set cookie
       res.cookie('token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-        sameSite: 'strict',
+        secure: isProduction, // Use secure cookies in production
+        sameSite: isProduction ? 'none' : 'lax', // 'none' for cross-site in production, 'lax' for local
         maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
       });
 

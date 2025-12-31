@@ -11,6 +11,9 @@ import { protect } from './middleware/authMiddleware';
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Trust proxy is required for secure cookies to work behind a load balancer (like on Vercel/Heroku/Railway)
+app.set('trust proxy', 1);
+
 app.use(cors({
   origin: ['http://localhost:5173', 'http://localhost:8080','https://bonuscalc-nu.vercel.app'], // Frontend URLs
   credentials: true, // Allow cookies to be sent
