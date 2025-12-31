@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { MetricCard } from "@/components/MetricCard";
 import { SectionHeader } from "@/components/SectionHeader";
@@ -6,6 +6,8 @@ import { ClientTable } from "@/components/ClientTable";
 import { TeamTable } from "@/components/TeamTable";
 import { EditableAllocationPanel } from "@/components/EditableAllocationPanel";
 import { PersonBonusHistory } from "@/components/PersonBonusHistory";
+import { AddRevenuePanel } from "@/components/AddRevenuePanel";
+import { ClientBonusHistory } from "@/components/ClientBonusHistory";
 import { useClientData } from "@/hooks/useClientData";
 import {
   getPersonTotalBonus,
@@ -17,6 +19,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 const Dashboard = () => {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
+  const [revenueClientId, setRevenueClientId] = useState<string | null>(null);
+  const [historyClientId, setHistoryClientId] = useState<string | null>(null);
 
   const {
     clients,
@@ -25,11 +29,14 @@ const Dashboard = () => {
     calculations,
     overrides,
     updateClientAllocations,
+    updateClientRevenue,
     getClientById,
     getPersonBonusHistory,
+    getClientBonusHistory,
     addOverride,
     getClientOverrides,
     processPayout,
+    fetchBonusHistory,
     isLoading,
     isHistoryLoading,
   } = useClientData();
@@ -42,12 +49,22 @@ const Dashboard = () => {
   );
 
   const selectedClient = selectedClientId ? getClientById(selectedClientId) : null;
+  const revenueClient = revenueClientId ? getClientById(revenueClientId) : null;
+
+  const historyClient = historyClientId ? getClientById(historyClientId) : null;
+  const clientHistory = historyClientId ? getClientBonusHistory(historyClientId) : [];
 
   const selectedPerson = selectedPersonId
     ? people.find((p) => p.id === selectedPersonId) ?? null
     : null;
 
   const personHistory = selectedPersonId ? getPersonBonusHistory(selectedPersonId) : [];
+
+  useEffect(() => {
+    if (historyClientId) {
+      fetchBonusHistory();
+    }
+  }, [historyClientId, fetchBonusHistory]);
 
   // Calculate summary metrics
   const totalBonusPool = calculations.reduce(
@@ -154,11 +171,37 @@ const Dashboard = () => {
         overrides={selectedClientOverrides}
         onClose={() => setSelectedClientId(null)}
         onSave={updateClientAllocations}
-        onViewHistory={() => {}}
-        onEditRevenue={() => {}} // No-op for dashboard for now
+        onViewHistory={(clientId) => {
+          setSelectedClientId(null);
+          setHistoryClientId(clientId);
+        }}
+        onEditRevenue={(clientId) => {
+          setSelectedClientId(null);
+          setRevenueClientId(clientId);
+        }}
         onAddOverride={addOverride}
         onProcessPayout={processPayout}
       />
+
+      {/* Revenue Panel */}
+      <AddRevenuePanel
+        isOpen={!!revenueClientId}
+        client={revenueClient}
+        onClose={() => setRevenueClientId(null)}
+        onSave={async (clientId, revenue) => {
+          await updateClientRevenue(clientId, revenue);
+        }}
+      />
+
+      {/* Client History Panel */}
+      {historyClientId && historyClient && (
+        <ClientBonusHistory
+          clientName={historyClient.name}
+          history={clientHistory}
+          onClose={() => setHistoryClientId(null)}
+          isLoading={isHistoryLoading}
+        />
+      )}
 
       {/* Person History Panel */}
       <PersonBonusHistory
@@ -169,12 +212,14 @@ const Dashboard = () => {
       />
 
       {/* Overlay when panel is open */}
-      {(selectedClientId || selectedPersonId) && (
+      {(selectedClientId || selectedPersonId || revenueClientId || historyClientId) && (
         <div
           className="fixed inset-0 bg-foreground/10 z-40"
           onClick={() => {
             setSelectedClientId(null);
             setSelectedPersonId(null);
+            setRevenueClientId(null);
+            setHistoryClientId(null);
           }}
         />
       )}

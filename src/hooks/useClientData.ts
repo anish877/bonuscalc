@@ -258,6 +258,7 @@ export function useClientData() {
           headers: {
             'Content-Type': 'application/json',
           },
+          credentials: 'include',
           body: JSON.stringify({ allocations: newAllocations }),
         });
 
@@ -320,6 +321,7 @@ export function useClientData() {
           headers: {
             'Content-Type': 'application/json',
           },
+          credentials: 'include',
           body: JSON.stringify({ revenue }),
         });
 

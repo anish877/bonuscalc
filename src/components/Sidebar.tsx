@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
 import {
   LayoutDashboard,
   Building2,
@@ -7,6 +8,7 @@ import {
   Calculator,
   Settings,
   DollarSign,
+  LogOut,
 } from "lucide-react";
 
 const navigation = [
@@ -18,6 +20,8 @@ const navigation = [
 ];
 
 export function Sidebar() {
+  const { user, logout } = useAuth();
+
   return (
     <aside className="fixed left-0 top-0 z-40 h-screen w-64 bg-sidebar border-r border-sidebar-border">
       <div className="flex h-full flex-col">
@@ -57,21 +61,29 @@ export function Sidebar() {
 
         {/* Footer */}
         <div className="border-t border-sidebar-border p-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 mb-4">
             <div className="h-8 w-8 rounded-full bg-sidebar-accent flex items-center justify-center">
               <span className="text-xs font-medium text-sidebar-foreground">
-                AD
+                {user?.email?.substring(0, 2).toUpperCase() || 'AD'}
               </span>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-sidebar-foreground truncate">
-                Admin User
+                {user?.email?.split('@')[0] || 'Admin User'}
               </p>
-              <p className="text-xs text-sidebar-foreground/60 truncate">
-                Finance Team
+              <p className="text-xs text-sidebar-foreground/60 truncate capitalize">
+                {user?.role || 'Finance Team'}
               </p>
             </div>
           </div>
+          
+          <button
+            onClick={logout}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+            Sign Out
+          </button>
         </div>
       </div>
     </aside>
