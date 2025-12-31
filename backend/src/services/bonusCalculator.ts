@@ -27,36 +27,16 @@ export interface MemberBonusAllocation {
   bonusAmount: number;
 }
 
-export const calculateBonusForClient = async (clientId: string): Promise<BonusCalculationResult> => {
-  // 1. Fetch Client and related data
-  const client = await prisma.client.findUnique({
-    where: { id: clientId },
-    include: {
-      monthlyRevenue: true,
-      teamAllocations: {
-        include: {
-          person: true
-        }
-      },
-      overrides: true
-    }
-  });
-
-  if (!client) {
-    throw new Error('Client not found');
+export const calculateBonusForClientData = (
+  client: Client & {
+    monthlyRevenue: MonthlyRevenue[];
+    teamAllocations: (TeamAllocation & { person: Person })[];
+    overrides: Override[];
+  },
+  settings: Settings & {
+    bonusSlabs: BonusSlab[];
   }
-
-  // 2. Fetch Settings
-  const settings = await prisma.settings.findFirst({
-    include: {
-      bonusSlabs: true
-    }
-  });
-
-  if (!settings) {
-    throw new Error('Settings not configured');
-  }
-
+): BonusCalculationResult => {
   const now = new Date();
   const onboardingDate = new Date(client.onboardingDate);
   const monthsSinceOnboarding = differenceInMonths(now, onboardingDate);
@@ -66,7 +46,7 @@ export const calculateBonusForClient = async (clientId: string): Promise<BonusCa
   // We use the setting minEligibilityMonths (default 3)
   if (monthsSinceOnboarding < settings.minEligibilityMonths) {
     return {
-      clientId,
+      clientId: client.id,
       clientName: client.name,
       isEligible: false,
       eligibilityReason: `Client is ${monthsSinceOnboarding} months old (Minimum ${settings.minEligibilityMonths} months required)`,
@@ -115,7 +95,7 @@ export const calculateBonusForClient = async (clientId: string): Promise<BonusCa
 
   if (monthsConsideredCount === 0) {
      return {
-      clientId,
+      clientId: client.id,
       clientName: client.name,
       isEligible: true,
       monthsConsidered: 0,
@@ -182,7 +162,7 @@ export const calculateBonusForClient = async (clientId: string): Promise<BonusCa
 
 
   return {
-    clientId,
+    clientId: client.id,
     clientName: client.name,
     isEligible: true,
     monthsConsidered: monthsConsideredCount,
@@ -195,4 +175,37 @@ export const calculateBonusForClient = async (clientId: string): Promise<BonusCa
     allocations,
     consideredMonthsList
   };
+};
+
+export const calculateBonusForClient = async (clientId: string): Promise<BonusCalculationResult> => {
+  // 1. Fetch Client and related data
+  const client = await prisma.client.findUnique({
+    where: { id: clientId },
+    include: {
+      monthlyRevenue: true,
+      teamAllocations: {
+        include: {
+          person: true
+        }
+      },
+      overrides: true
+    }
+  });
+
+  if (!client) {
+    throw new Error('Client not found');
+  }
+
+  // 2. Fetch Settings
+  const settings = await prisma.settings.findFirst({
+    include: {
+      bonusSlabs: true
+    }
+  });
+
+  if (!settings) {
+    throw new Error('Settings not configured');
+  }
+
+  return calculateBonusForClientData(client, settings);
 };

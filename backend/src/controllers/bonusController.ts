@@ -1,21 +1,33 @@
 import { Request, Response } from 'express';
 import prisma from '../lib/prisma';
-import { calculateBonusForClient } from '../services/bonusCalculator';
+import { calculateBonusForClientData } from '../services/bonusCalculator';
 
 export const getAllBonusCalculations = async (req: Request, res: Response) => {
   try {
-    const clients = await prisma.client.findMany({
-      select: { id: true } // Only need IDs to iterate
+    const settings = await prisma.settings.findFirst({
+      include: {
+        bonusSlabs: true
+      }
     });
 
-    const calculations = await Promise.all(
-      clients.map(client => calculateBonusForClient(client.id))
-    );
+    if (!settings) {
+      res.status(500).json({ error: 'Settings not configured' });
+      return;
+    }
 
-    // Filter out errors or handle them? calculateBonusForClient throws if not found/settings missing.
-    // Ideally we catch inside map or ensure it works. 
-    // calculateBonusForClient handles logic, but throws if settings missing.
-    // If settings missing, it will fail for all.
+    const clients = await prisma.client.findMany({
+      include: {
+        monthlyRevenue: true,
+        teamAllocations: {
+          include: {
+            person: true
+          }
+        },
+        overrides: true
+      }
+    });
+
+    const calculations = clients.map(client => calculateBonusForClientData(client, settings));
     
     res.json(calculations);
   } catch (error) {

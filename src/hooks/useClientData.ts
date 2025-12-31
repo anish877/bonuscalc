@@ -129,45 +129,52 @@ export function useClientData() {
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
-    // Fetch Settings
-    try {
-      const settingsRes = await fetch(`${import.meta.env.VITE_API_URL}/api/settings`, { credentials: 'include' });
-      if (settingsRes.ok) {
-        const data = await settingsRes.json();
-        setSettings(data);
-      }
-    } catch (e) { console.error('Failed to fetch settings:', e); }
+    
+    const fetchSettings = async () => {
+      try {
+        const settingsRes = await fetch(`${import.meta.env.VITE_API_URL}/api/settings`, { credentials: 'include' });
+        if (settingsRes.ok) {
+          const data = await settingsRes.json();
+          setSettings(data);
+        }
+      } catch (e) { console.error('Failed to fetch settings:', e); }
+    };
 
-    // Fetch Clients
-    try {
-      const clientsRes = await fetch(`${import.meta.env.VITE_API_URL}/api/clients`, { credentials: 'include' });
-      if (clientsRes.ok) {
-         const clientsData = await clientsRes.json();
-         const parsedClients = (clientsData as (Client & { onboardingDate: string, overrides: Override[] })[]).map((c) => ({
-           ...c,
-           onboardingDate: new Date(c.onboardingDate),
-         }));
-         setClients(parsedClients);
-         
-         // Extract and set overrides
-         const allOverrides = parsedClients.flatMap(c => c.overrides || []);
-         setOverrides(allOverrides);
-      }
-    } catch (e) { console.error('Failed to fetch clients:', e); }
+    const fetchClients = async () => {
+      try {
+        const clientsRes = await fetch(`${import.meta.env.VITE_API_URL}/api/clients`, { credentials: 'include' });
+        if (clientsRes.ok) {
+           const clientsData = await clientsRes.json();
+           const parsedClients = (clientsData as (Client & { onboardingDate: string, overrides: Override[] })[]).map((c) => ({
+             ...c,
+             onboardingDate: new Date(c.onboardingDate),
+           }));
+           setClients(parsedClients);
+           
+           // Extract and set overrides
+           const allOverrides = parsedClients.flatMap(c => c.overrides || []);
+           setOverrides(allOverrides);
+        }
+      } catch (e) { console.error('Failed to fetch clients:', e); }
+    };
 
-    // Fetch People
-    try {
-      const peopleRes = await fetch(`${import.meta.env.VITE_API_URL}/api/people`, { credentials: 'include' });
-      if (peopleRes.ok) {
-        setPeople(await peopleRes.json());
-      }
-    } catch (e) { console.error('Failed to fetch people:', e); }
+    const fetchPeople = async () => {
+      try {
+        const peopleRes = await fetch(`${import.meta.env.VITE_API_URL}/api/people`, { credentials: 'include' });
+        if (peopleRes.ok) {
+          setPeople(await peopleRes.json());
+        }
+      } catch (e) { console.error('Failed to fetch people:', e); }
+    };
 
-    // Fetch Calculations
-    await fetchCalculations();
-
-    // Fetch Bonus History
-    await fetchBonusHistory();
+    // Execute all fetches in parallel
+    await Promise.all([
+      fetchSettings(),
+      fetchClients(),
+      fetchPeople(),
+      fetchCalculations(),
+      fetchBonusHistory()
+    ]);
 
     setIsLoading(false);
   }, [fetchCalculations, fetchBonusHistory]);
