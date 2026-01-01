@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Client, MonthlyRevenue } from "@/types/bonus";
 import { formatCurrency } from "@/lib/bonusCalculations";
-import { X, TrendingUp, Calendar, Save, History } from "lucide-react";
+import { X, TrendingUp, Calendar, Save, History, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -73,6 +73,13 @@ export function AddRevenuePanel({
         r.month === month ? { ...r, collected: isNaN(value) ? 0 : value } : r
       )
     );
+  };
+
+  const handleCopyToAll = (amount: number) => {
+    setRevenueData(prev =>
+      prev.map(r => ({ ...r, collected: amount }))
+    );
+    toast({ title: "Copied", description: `Copied ${formatCurrency(amount)} to all months.` });
   };
 
   const handleSave = async () => {
@@ -164,6 +171,15 @@ export function AddRevenuePanel({
                       placeholder="0.00"
                     />
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 text-muted-foreground hover:text-primary"
+                    title="Copy to all rows"
+                    onClick={() => handleCopyToAll(record.collected)}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             ))

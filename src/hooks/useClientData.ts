@@ -93,7 +93,7 @@ export function useClientData() {
           eligibleMonths: d.monthsConsidered,
           totalRevenue: d.totalRevenue,
           averageMonthlyRevenue: d.averageMonthlyRevenue,
-          expenseDeduction: d.averageMonthlyRevenue - d.netRevenue,
+          expenseDeduction: d.totalRevenue - d.netRevenue,
           netRevenue: d.netRevenue,
           appliedBonusPercentage: d.bonusPercentage,
           totalBonusPool: d.bonusPool,

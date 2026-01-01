@@ -3,13 +3,6 @@ import { X, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Person } from "@/types/bonus";
 
 interface AddMemberPanelProps {
@@ -17,6 +10,10 @@ interface AddMemberPanelProps {
   onClose: () => void;
   onSave: (person: Omit<Person, "id">) => Promise<void>;
 }
+
+import { Badge } from "@/components/ui/badge";
+
+const PREDEFINED_ROLES = ["Developer", "Designer", "Product Manager", "Content", "Marketing"];
 
 export function AddMemberPanel({ isOpen, onClose, onSave }: AddMemberPanelProps) {
   const [name, setName] = useState("");
@@ -93,20 +90,28 @@ export function AddMemberPanel({ isOpen, onClose, onSave }: AddMemberPanelProps)
             />
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-3">
             <Label htmlFor="role">Role</Label>
-            <Select value={role} onValueChange={setRole}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select role..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Developer">Developer</SelectItem>
-                <SelectItem value="Designer">Designer</SelectItem>
-                <SelectItem value="Product Manager">Product Manager</SelectItem>
-                <SelectItem value="Content">Content</SelectItem>
-                <SelectItem value="Marketing">Marketing</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="space-y-2">
+              <Input
+                id="role"
+                placeholder="e.g. Developer, HR, Finance..."
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+              />
+              <div className="flex flex-wrap gap-2">
+                {PREDEFINED_ROLES.map((r) => (
+                  <Badge
+                    key={r}
+                    variant={role === r ? "default" : "outline"}
+                    className="cursor-pointer hover:bg-primary/20 transition-colors"
+                    onClick={() => setRole(r)}
+                  >
+                    {r}
+                  </Badge>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2">

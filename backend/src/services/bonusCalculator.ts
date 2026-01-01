@@ -114,11 +114,11 @@ export const calculateBonusForClientData = (
   // "then find the average monthly revenue"
   const averageMonthlyRevenue = monthsConsideredCount > 0 ? totalRevenue / monthsConsideredCount : 0;
 
-  // 6. Calculate Net Revenue (Average Monthly)
+  // 6. Calculate Net Revenue (Total for period)
   // "take the toal considered months revenue substarect global expense percentage"
   // Formula: Total - (Total * Expense%) = Total * (1 - Expense%)
-  // Frontend Logic: Net Revenue = AverageMonthly * (1 - Expense%)
-  const netRevenue = averageMonthlyRevenue * (1 - settings.companyExpensePercentage / 100);
+  // Frontend Logic: Net Revenue = Total * (1 - Expense%)
+  const netRevenue = totalRevenue * (1 - settings.companyExpensePercentage / 100);
 
   // 7. Determine Bonus Percentage from Slabs
   // "alocated bonus percentage will be bonu pool" -> Likely means look up % in slab
