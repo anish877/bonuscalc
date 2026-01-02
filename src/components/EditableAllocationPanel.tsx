@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { ClientBonusCalculation, Person, TeamAllocation, Client, Override } from "@/types/bonus";
 import { formatCurrency, formatPercentage } from "@/lib/bonusCalculations";
-import { X, Calculator, Users, TrendingUp, AlertTriangle, Check, Plus, Trash2, History, FileEdit, DollarSign } from "lucide-react";
+import { X, Calculator, Users, TrendingUp, AlertTriangle, Check, Plus, Trash2, History, FileEdit, DollarSign, Calendar, Clock, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -58,11 +58,105 @@ export function EditableAllocationPanel({
   const [showOverrideDialog, setShowOverrideDialog] = useState(false);
   const [showOverrideHistory, setShowOverrideHistory] = useState(false);
   const [showPayoutDialog, setShowPayoutDialog] = useState(false);
-  const [payoutPeriod, setPayoutPeriod] = useState<string>(
-    new Date().toISOString().slice(0, 7)
-  );
   const [isProcessingPayout, setIsProcessingPayout] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [displayCalc, setDisplayCalc] = useState<ClientBonusCalculation | null>(calculation);
+  const now = new Date();
+  const quarterOptions = useMemo(() => {
+    if (!client) return [];
+    const start = new Date(client.onboardingDate);
+    // Normalize to start of its quarter
+    const startQuarter = Math.floor(start.getMonth() / 3) + 1;
+    const startYear = start.getFullYear();
+    const options: string[] = [];
+    let y = startYear;
+    let q = startQuarter;
+    const currentYear = now.getFullYear();
+    const currentQuarter = Math.floor(now.getMonth() / 3) + 1;
+    while (y < currentYear || (y === currentYear && q <= currentQuarter)) {
+      options.push(`${y}-Q${q}`);
+      q += 1;
+      if (q > 4) { q = 1; y += 1; }
+    }
+    return options;
+  }, [client, now]);
+  const [selectedQuarter, setSelectedQuarter] = useState<string>("");
+  useEffect(() => {
+    if (quarterOptions.length > 0 && !selectedQuarter) {
+      setSelectedQuarter(quarterOptions[quarterOptions.length - 1]);
+    }
+  }, [quarterOptions, selectedQuarter]);
+  const halfYearRef = useMemo(() => {
+    if (!selectedQuarter) return "";
+    const [yStr, qStr] = selectedQuarter.split("-");
+    const y = parseInt(yStr);
+    const q = qStr as "Q1" | "Q2" | "Q3" | "Q4";
+    if (q === "Q3" || q === "Q4") return `${y}-H1`;
+    return `${y - 1}-H2`;
+  }, [selectedQuarter]);
+  const loadCalcForSelectedQuarter = useCallback(async () => {
+    if (!selectedQuarter || !client) return;
+    const [yStr, qStr] = selectedQuarter.split("-");
+    const y = parseInt(yStr);
+    const q = qStr as "Q1" | "Q2" | "Q3" | "Q4";
+    const refYear = q === "Q3" || q === "Q4" ? y : y - 1;
+    const refHalf: "H1" | "H2" = q === "Q3" || q === "Q4" ? "H1" : "H2";
+    try {
+      const params = new URLSearchParams({ year: refYear.toString(), halfYear: refHalf });
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/bonus/calculations?${params.toString()}`, { credentials: 'include' });
+      if (response.ok) {
+        const data: {
+          clientId: string;
+          clientName: string;
+          isEligible: boolean;
+          eligibilityReason?: string;
+          monthsConsidered: number;
+          totalRevenue: number;
+          averageMonthlyRevenue: number;
+          netRevenue: number;
+          bonusPercentage: number;
+          bonusPool: number;
+          allocations: { personId: string; personName: string; weight: number; bonusAmount: number }[];
+          period: string;
+          consideredMonthsList: string[];
+        }[] = await response.json();
+        const clientCalc = data.find((d) => d.clientId === client.id);
+        if (clientCalc) {
+          const mapped: ClientBonusCalculation = {
+            clientId: clientCalc.clientId,
+            clientName: clientCalc.clientName,
+            isEligible: clientCalc.isEligible,
+            eligibilityReason: clientCalc.eligibilityReason,
+            eligibleMonths: clientCalc.monthsConsidered,
+            totalRevenue: clientCalc.totalRevenue,
+            averageMonthlyRevenue: clientCalc.averageMonthlyRevenue,
+            expenseDeduction: clientCalc.totalRevenue - clientCalc.netRevenue,
+            netRevenue: clientCalc.netRevenue,
+            appliedBonusPercentage: clientCalc.bonusPercentage,
+            totalBonusPool: clientCalc.bonusPool,
+            allocations: clientCalc.allocations.map((a) => ({
+              personId: a.personId,
+              personName: a.personName,
+              weight: a.weight,
+              bonusAmount: a.bonusAmount
+            })),
+            isWeightValid: true,
+            period: clientCalc.period,
+            consideredMonthsList: clientCalc.consideredMonthsList,
+          };
+          setDisplayCalc(mapped);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load calculation for quarter:', e);
+    }
+  }, [selectedQuarter, client]);
+  useEffect(() => {
+    loadCalcForSelectedQuarter();
+  }, [loadCalcForSelectedQuarter]);
+  useEffect(() => {
+    setDisplayCalc(calculation);
+  }, [calculation]);
 
   useEffect(() => {
     if (client) {
@@ -80,19 +174,20 @@ export function EditableAllocationPanel({
 
   // Calculate preview bonuses in real-time based on backend-provided pool
   const previewAllocations = useMemo(() => {
-    if (!calculation || !localAllocations.length) return [];
+    const calc = displayCalc ?? calculation;
+    if (!calc || !localAllocations.length) return [];
     
     // Distribute the known totalBonusPool according to local weights
     return localAllocations.map(alloc => {
        const person = people.find(p => p.id === alloc.personId);
-       const bonusAmount = isValid ? calculation.totalBonusPool * (alloc.weight / 100) : 0;
+       const bonusAmount = isValid ? (calc.totalBonusPool / 2) * (alloc.weight / 100) : 0;
        return {
          ...alloc,
          personName: person?.name ?? "Unknown",
          bonusAmount
        };
     });
-  }, [calculation, localAllocations, people, isValid]);
+  }, [displayCalc, calculation, localAllocations, people, isValid]);
 
   const availableMembers = useMemo(() => {
     const assignedIds = new Set(localAllocations.map((a) => a.personId));
@@ -100,21 +195,29 @@ export function EditableAllocationPanel({
   }, [people, localAllocations]);
 
   const effectiveTotalBonus = useMemo(() => {
-    if (!calculation || !localAllocations.length) return 0;
+    const calc = displayCalc ?? calculation;
+    if (!calc || !localAllocations.length) return 0;
     
     return localAllocations.reduce((sum, alloc) => {
       // Check for override
       const override = overrides.find(o => o.personId === alloc.personId);
       if (override) {
-        return sum + override.overrideAmount;
+        return sum + (override.overrideAmount / 2);
       }
       
       // Calculate standard bonus
-      const bonusAmount = isValid ? calculation.totalBonusPool * (alloc.weight / 100) : 0;
+      const bonusAmount = isValid ? (calc.totalBonusPool / 2) * (alloc.weight / 100) : 0;
       return sum + bonusAmount;
     }, 0);
-  }, [calculation, localAllocations, overrides, isValid]);
+  }, [displayCalc, calculation, localAllocations, overrides, isValid]);
 
+  // legacy halfYearRef derived from payoutQuarter/year removed
+  
+  const halfPayoutAmount = useMemo(() => {
+    const calc = displayCalc ?? calculation;
+    return (calc?.totalBonusPool ?? 0) / 2;
+  }, [displayCalc, calculation]);
+  
   if (!calculation || !client) return null;
 
   const handleWeightChange = (personId: string, newWeight: number) => {
@@ -156,14 +259,15 @@ export function EditableAllocationPanel({
     if (!client) return;
     setIsProcessingPayout(true);
     try {
-      await onProcessPayout(client.id, payoutPeriod);
+      await onProcessPayout(client.id, selectedQuarter);
       setShowPayoutDialog(false);
     } catch (error) {
-      // Error is logged in hook
+      setShowPayoutDialog(false);
     } finally {
       setIsProcessingPayout(false);
     }
   };
+  
 
   return (
     <div className="fixed inset-y-0 right-0 w-[520px] bg-card border-l border-border shadow-lg z-50 slide-up overflow-y-auto">
@@ -196,6 +300,69 @@ export function EditableAllocationPanel({
       </div>
 
       <div className="p-6 space-y-6">
+        {/* Period & Context Info */}
+        <div className="bg-primary/5 rounded-lg border border-primary/10 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-primary" />
+                    <h3 className="font-semibold text-primary">
+                        {(displayCalc ?? calculation)?.period ? (displayCalc ?? calculation)!.period!.replace('-', ' ') : 'Selected Period'}
+                    </h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Select value={selectedQuarter} onValueChange={setSelectedQuarter}>
+                    <SelectTrigger className="w-36">
+                      <SelectValue placeholder="Select quarter" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {quarterOptions.map((opt) => (
+                        <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <StatusBadge status={(displayCalc ?? calculation)?.isEligible ? "valid" : "invalid"}>
+                    {(displayCalc ?? calculation)?.isEligible ? "Eligible" : "Not Eligible"}
+                  </StatusBadge>
+                </div>
+            </div>
+            
+            {(displayCalc ?? calculation)?.consideredMonthsList && (displayCalc ?? calculation)!.consideredMonthsList!.length > 0 && (
+                <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                    <Clock className="h-4 w-4 mt-0.5 shrink-0" />
+                    <div>
+                        <p className="font-medium text-foreground mb-1">Included Months:</p>
+                        <div className="flex flex-wrap gap-1">
+                            {(displayCalc ?? calculation)!.consideredMonthsList!.map(m => {
+                                const [y, mon] = m.split('-');
+                                const date = new Date(parseInt(y), parseInt(mon) - 1);
+                                return (
+                                    <span key={m} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-background border border-border">
+                                        {date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}
+                                    </span>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {!(displayCalc ?? calculation)?.isEligible && (displayCalc ?? calculation)?.eligibilityReason && (
+                <div className="flex items-start gap-2 text-sm text-destructive bg-destructive/5 p-2 rounded">
+                    <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                    <p>{(displayCalc ?? calculation)!.eligibilityReason}</p>
+                </div>
+            )}
+            
+            <div className="flex items-center justify-between pt-2 border-t border-border/50">
+              <div className="text-sm text-muted-foreground">Selected Quarter</div>
+              <div className="text-sm font-medium">{selectedQuarter}</div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">Half-Year Reference</div>
+              <div className="text-sm font-medium">{halfYearRef}</div>
+            </div>
+        </div>
+
         {/* Weight Validation Status */}
         <div
           className={`flex items-center justify-between p-3 rounded-lg border ${
@@ -234,7 +401,7 @@ export function EditableAllocationPanel({
                 size="lg" 
                 className="gap-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg font-bold text-md px-6"
                 onClick={() => setShowPayoutDialog(true)}
-                disabled={!calculation.isEligible}
+                disabled={!((displayCalc ?? calculation)?.isEligible)}
               >
                 <DollarSign className="h-5 w-5" />
                 Payout
@@ -252,23 +419,23 @@ export function EditableAllocationPanel({
           <div className="space-y-3 bg-muted/50 rounded-lg p-4">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Eligible Months</span>
-              <span className="font-medium">{calculation.eligibleMonths}</span>
+              <span className="font-medium">{(displayCalc ?? calculation)?.eligibleMonths}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Total Revenue (6mo)</span>
-              <span className="font-medium">{formatCurrency(calculation.totalRevenue)}</span>
+              <span className="font-medium">{formatCurrency((displayCalc ?? calculation)?.totalRevenue || 0)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Avg Monthly Revenue</span>
-              <span className="font-medium">{formatCurrency(calculation.averageMonthlyRevenue)}</span>
+              <span className="font-medium">{formatCurrency((displayCalc ?? calculation)?.averageMonthlyRevenue || 0)}</span>
             </div>
             <div className="border-t border-border pt-3 flex justify-between text-sm">
               <span className="text-muted-foreground">Expense Deduction</span>
-              <span className="text-destructive">-{formatCurrency(calculation.expenseDeduction)}</span>
+              <span className="text-destructive">-{formatCurrency((displayCalc ?? calculation)?.expenseDeduction || 0)}</span>
             </div>
             <div className="flex justify-between">
               <span className="font-medium">Net Revenue</span>
-              <span className="font-semibold text-primary">{formatCurrency(calculation.netRevenue)}</span>
+              <span className="font-semibold text-primary">{formatCurrency((displayCalc ?? calculation)?.netRevenue || 0)}</span>
             </div>
           </div>
         </div>
@@ -283,13 +450,13 @@ export function EditableAllocationPanel({
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Applied Bonus Rate</span>
               <StatusBadge status="info">
-                {formatPercentage(calculation.appliedBonusPercentage)}
+                {formatPercentage((displayCalc ?? calculation)?.appliedBonusPercentage || 0)}
               </StatusBadge>
             </div>
             <div className="flex justify-between items-center pt-2 border-t border-border">
-              <span className="font-medium">Total Bonus Pool</span>
+              <span className="font-medium">Quarter Payout (50%)</span>
               <span className="text-xl font-bold text-success">
-                {formatCurrency(calculation.totalBonusPool)}
+                {formatCurrency(halfPayoutAmount)}
               </span>
             </div>
           </div>
@@ -390,7 +557,7 @@ export function EditableAllocationPanel({
                     {override ? (
                       <div className="text-right">
                         <span className="font-semibold text-primary">
-                          {formatCurrency(override.overrideAmount)}
+                          {formatCurrency(override.overrideAmount / 2)}
                         </span>
                         <p className="text-xs text-muted-foreground line-through">
                           {formatCurrency(previewAlloc?.bonusAmount ?? 0)}
@@ -493,22 +660,23 @@ export function EditableAllocationPanel({
           
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="period" className="text-right">
-                Month
-              </Label>
-              <Input
-                id="period"
-                type="month"
-                value={payoutPeriod}
-                onChange={(e) => setPayoutPeriod(e.target.value)}
-                className="col-span-3"
-              />
+              <Label className="text-right">Selected Quarter</Label>
+              <div className="col-span-3 font-medium">
+                {selectedQuarter}
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Half-Year Reference</Label>
+              <div className="col-span-3 font-medium">
+                {halfYearRef}
+              </div>
             </div>
             
             <div className="grid grid-cols-4 items-center gap-4">
               <Label className="text-right">Total Payout</Label>
               <div className="col-span-3 font-semibold text-lg text-success">
-                {formatCurrency(effectiveTotalBonus)}
+                {formatCurrency(halfPayoutAmount)}
               </div>
             </div>
           </div>

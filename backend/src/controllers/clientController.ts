@@ -175,13 +175,63 @@ export const getClientBonus = async (req: Request, res: Response) => {
 export const processClientPayout = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { period } = req.body; // Expecting 'YYYY-MM'
+    const { period } = req.body; // Expecting 'YYYY-Qx' or 'YYYY-MM' (for legacy)
 
     if (!period) {
-      res.status(400).json({ error: 'Payout period (YYYY-MM) is required' });
+      res.status(400).json({ error: 'Payout period (YYYY-Qx) is required' });
       return;
     }
 
+    // Try to find a QuarterPayout first (New Logic)
+    const pendingPayout = await prisma.quarterPayout.findFirst({
+      where: {
+        halfYearBonus: { clientId: id },
+        payoutPeriod: period,
+        status: 'PENDING'
+      },
+      include: {
+        halfYearBonus: true
+      }
+    });
+
+    if (pendingPayout) {
+      // New Logic: Mark as PAID and create history records from snapshot
+      await prisma.$transaction(async (tx) => {
+        // 1. Mark QuarterPayout as PAID
+        await tx.quarterPayout.update({
+          where: { id: pendingPayout.id },
+          data: { status: 'PAID' }
+        });
+
+        // 2. Distribute 50% of the bonus based on frozen allocations
+        const allocations = pendingPayout.halfYearBonus.allocations as unknown as { personId: string; bonusAmount: string | number; weight: number }[] | null;
+
+        if (allocations && Array.isArray(allocations)) {
+          const historyRecords = allocations.map(alloc => ({
+            period: period, // e.g. "2024-Q3"
+            clientId: id,
+            personId: alloc.personId,
+            weight: Number(alloc.weight),
+            bonusAmount: Number(alloc.bonusAmount) / 2, // 50% payout
+            totalClientBonus: pendingPayout.amount,
+            averageMonthlyRevenue: pendingPayout.halfYearBonus.totalRevenue / 6, // Approximate
+            appliedBonusPercentage: 0, // Not stored in HalfYearBonus, can add if needed
+            calculatedAt: new Date()
+          }));
+
+          if (historyRecords.length > 0) {
+            await tx.bonusHistoryRecord.createMany({
+              data: historyRecords
+            });
+          }
+        }
+      });
+
+      res.json({ message: 'Quarter payout processed successfully', period, totalAmount: pendingPayout.amount });
+      return;
+    }
+
+    // Fallback to Old Logic (for ad-hoc or legacy calls if needed, though likely not reachable if UI uses new flow)
     // 1. Calculate current bonus state
     const calculation = await calculateBonusForClient(id);
     

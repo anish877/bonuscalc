@@ -1,12 +1,13 @@
 import { ClientBonusCalculation } from "@/types/bonus";
 import { formatCurrency, formatPercentage } from "@/lib/bonusCalculations";
 import { StatusBadge } from "@/components/StatusBadge";
-import { ChevronRight, AlertCircle } from "lucide-react";
+import { ChevronRight, AlertCircle, Lock, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 
 interface ClientTableProps {
-  calculations: ClientBonusCalculation[];
+  calculations: (ClientBonusCalculation & { isFinalized?: boolean })[];
   onClientClick?: (clientId: string) => void;
   isLoading?: boolean;
 }
@@ -24,6 +25,7 @@ export function ClientTable({ calculations, onClientClick, isLoading }: ClientTa
               <th className="text-center">Bonus %</th>
               <th className="text-right">Bonus Pool</th>
               <th className="text-center">Team</th>
+              <th className="text-center">Status</th>
               <th className="w-10"></th>
             </tr>
           </thead>
@@ -44,6 +46,7 @@ export function ClientTable({ calculations, onClientClick, isLoading }: ClientTa
                 <td className="text-center"><div className="flex justify-center"><Skeleton className="h-6 w-12" /></div></td>
                 <td className="text-right"><Skeleton className="h-4 w-24 ml-auto" /></td>
                 <td className="text-center"><div className="flex justify-center"><Skeleton className="h-5 w-16" /></div></td>
+                <td className="text-center"><Skeleton className="h-6 w-20 mx-auto" /></td>
                 <td><Skeleton className="h-4 w-4" /></td>
               </tr>
             ))}
@@ -64,6 +67,7 @@ export function ClientTable({ calculations, onClientClick, isLoading }: ClientTa
             <th className="text-center">Bonus %</th>
             <th className="text-right">Bonus Pool</th>
             <th className="text-center">Team</th>
+            <th className="text-center">Status</th>
             <th className="w-10"></th>
           </tr>
         </thead>
@@ -120,12 +124,22 @@ export function ClientTable({ calculations, onClientClick, isLoading }: ClientTa
                       </StatusBadge>
                     )}
                   </td>
+                  <td className="text-center">
+                    {calc.isFinalized ? (
+                      <div className="flex items-center justify-center text-success text-xs font-medium">
+                        <Lock className="h-3 w-3 mr-1" />
+                        Finalized
+                      </div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground">—</div>
+                    )}
+                  </td>
                   <td>
                     <ChevronRight className="h-4 w-4 text-muted-foreground" />
                   </td>
                 </>
               ) : (
-                <td colSpan={6} className="text-center py-4">
+                <td colSpan={7} className="text-center py-4">
                   <div className="flex flex-col items-center justify-center text-muted-foreground">
                     <span className="font-medium text-destructive/80">Not Eligible</span>
                     {calc.eligibilityReason && (

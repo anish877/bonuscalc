@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { Client, Person, Settings, TeamAllocation, BonusHistoryRecord, AllocationChange, Override, ClientBonusCalculation } from "@/types/bonus";
+import { Client, Person, Settings, TeamAllocation, BonusHistoryRecord, AllocationChange, Override, ClientBonusCalculation, HalfYear, HalfYearBonus } from "@/types/bonus";
 
 const defaultSettings: Settings = {
   companyExpensePercentage: 0,
@@ -62,15 +62,20 @@ export function useClientData() {
   const [people, setPeople] = useState<Person[]>([]);
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [bonusHistory, setBonusHistory] = useState<BonusHistoryRecord[]>([]);
+  const [halfYearHistory, setHalfYearHistory] = useState<HalfYearBonus[]>([]);
   const [allocationChanges, setAllocationChanges] = useState<AllocationChange[]>([]);
   const [overrides, setOverrides] = useState<Override[]>([]);
   const [calculations, setCalculations] = useState<ClientBonusCalculation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
-  const fetchCalculations = useCallback(async () => {
+  const fetchCalculations = useCallback(async (year?: number, halfYear?: HalfYear) => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/bonus/calculations`, { credentials: 'include' });
+      const params = new URLSearchParams();
+      if (year) params.append('year', year.toString());
+      if (halfYear) params.append('halfYear', halfYear);
+      
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/bonus/calculations?${params.toString()}`, { credentials: 'include' });
       if (response.ok) {
         const data = await response.json();
         const mappedCalculations: ClientBonusCalculation[] = data.map((d: {
@@ -85,6 +90,8 @@ export function useClientData() {
           bonusPercentage: number;
           bonusPool: number;
           allocations: { personId: string; personName: string; weight: number; bonusAmount: number }[];
+          period: string;
+          consideredMonthsList: string[];
         }) => ({
           clientId: d.clientId,
           clientName: d.clientName,
@@ -103,7 +110,9 @@ export function useClientData() {
              weight: a.weight,
              bonusAmount: a.bonusAmount
           })),
-          isWeightValid: true
+          isWeightValid: true,
+          period: d.period,
+          consideredMonthsList: d.consideredMonthsList
         }));
         setCalculations(mappedCalculations);
       }
@@ -126,6 +135,39 @@ export function useClientData() {
       setIsHistoryLoading(false);
     }
   }, []);
+
+  const fetchHalfYearHistory = useCallback(async () => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/bonus/half-year-history`, { credentials: 'include' });
+      if (response.ok) {
+        setHalfYearHistory(await response.json());
+      }
+    } catch (e) {
+      console.error('Failed to fetch half year history:', e);
+    }
+  }, []);
+
+  const finalizeBonus = useCallback(async (clientId: string, year: number, halfYear: HalfYear) => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/bonus/finalize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ clientId, year, halfYear })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to finalize bonus');
+      }
+      
+      await fetchHalfYearHistory(); // Refresh history
+      return await response.json();
+    } catch (e) {
+      console.error('Error finalizing bonus:', e);
+      throw e;
+    }
+  }, [fetchHalfYearHistory]);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -173,11 +215,12 @@ export function useClientData() {
       fetchClients(),
       fetchPeople(),
       fetchCalculations(),
-      fetchBonusHistory()
+      fetchBonusHistory(),
+      fetchHalfYearHistory()
     ]);
 
     setIsLoading(false);
-  }, [fetchCalculations, fetchBonusHistory]);
+  }, [fetchCalculations, fetchBonusHistory, fetchHalfYearHistory]);
 
   useEffect(() => {
     fetchData();
@@ -461,6 +504,9 @@ export function useClientData() {
     getClientOverrides,
     processPayout,
     fetchBonusHistory,
+    fetchCalculations,
+    halfYearHistory,
+    finalizeBonus,
     isLoading,
     isHistoryLoading,
   };

@@ -15,31 +15,51 @@ import {
 } from "@/lib/bonusCalculations";
 import { DollarSign, Users, Building2, TrendingUp } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { HalfYear } from "@/types/bonus";
 
 const Dashboard = () => {
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [revenueClientId, setRevenueClientId] = useState<string | null>(null);
   const [historyClientId, setHistoryClientId] = useState<string | null>(null);
+  
+  // Period Selection State
+  const [year, setYear] = useState<number>(new Date().getFullYear());
+  const [halfYear, setHalfYear] = useState<HalfYear>(new Date().getMonth() < 6 ? 'H1' : 'H2');
 
   const {
     clients,
     people,
     settings,
     calculations,
-    overrides,
     updateClientAllocations,
     updateClientRevenue,
     getClientById,
     getPersonBonusHistory,
-    getClientBonusHistory,
     addOverride,
     getClientOverrides,
     processPayout,
     fetchBonusHistory,
+    fetchCalculations,
+    halfYearHistory,
     isLoading,
     isHistoryLoading,
   } = useClientData();
+
+  // Fetch calculations when period changes
+  useEffect(() => {
+    fetchCalculations(year, halfYear);
+  }, [year, halfYear, fetchCalculations]);
+
+  const calculationsWithStatus = useMemo(() => {
+    return calculations.map(c => ({
+      ...c,
+      isFinalized: halfYearHistory.some(h => h.clientId === c.clientId && h.period === `${year}-${halfYear}`)
+    }));
+  }, [calculations, halfYearHistory, year, halfYear]);
+
+  // Finalization handled by backend processes; no manual finalize in table
 
   const selectedClientOverrides = selectedClientId ? getClientOverrides(selectedClientId) : [];
 
@@ -52,7 +72,11 @@ const Dashboard = () => {
   const revenueClient = revenueClientId ? getClientById(revenueClientId) : null;
 
   const historyClient = historyClientId ? getClientById(historyClientId) : null;
-  const clientHistory = historyClientId ? getClientBonusHistory(historyClientId) : [];
+  const clientHalfYearHistory = useMemo(() => {
+    return historyClientId 
+        ? halfYearHistory.filter(h => h.clientId === historyClientId).sort((a, b) => b.period.localeCompare(a.period))
+        : [];
+  }, [halfYearHistory, historyClientId]);
 
   const selectedPerson = selectedPersonId
     ? people.find((p) => p.id === selectedPersonId) ?? null
@@ -88,11 +112,34 @@ const Dashboard = () => {
     <Layout>
       <div className="space-y-8">
         {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">
-            Bonus calculations for the last 6 completed months
-          </p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+            <p className="text-muted-foreground mt-1">
+              Bonus calculations for {year} {halfYear === 'H1' ? '(Jan - Jun)' : '(Jul - Dec)'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Select value={year.toString()} onValueChange={(v) => setYear(parseInt(v))}>
+                <SelectTrigger className="w-[100px]">
+                    <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent>
+                    {[2024, 2025, 2026].map(y => (
+                        <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+            <Select value={halfYear} onValueChange={(v) => setHalfYear(v as HalfYear)}>
+                <SelectTrigger className="w-[80px]">
+                    <SelectValue placeholder="Period" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="H1">H1</SelectItem>
+                    <SelectItem value="H2">H2</SelectItem>
+                </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Metrics Grid */}
@@ -141,7 +188,7 @@ const Dashboard = () => {
               description="Click a client to view detailed breakdown"
             />
             <ClientTable
-              calculations={calculations}
+              calculations={calculationsWithStatus}
               onClientClick={setSelectedClientId}
               isLoading={isLoading}
             />
@@ -197,8 +244,11 @@ const Dashboard = () => {
       {historyClientId && historyClient && (
         <ClientBonusHistory
           clientName={historyClient.name}
-          history={clientHistory}
+          history={clientHalfYearHistory}
           onClose={() => setHistoryClientId(null)}
+          onProcessPayout={async (period) => {
+             await processPayout(historyClientId, period);
+          }}
           isLoading={isHistoryLoading}
         />
       )}

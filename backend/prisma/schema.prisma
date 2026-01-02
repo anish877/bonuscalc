@@ -19,6 +19,7 @@ model Client {
   teamAllocations TeamAllocation[]
   overrides       Override[]
   bonusHistory    BonusHistoryRecord[]
+  halfYearBonuses HalfYearBonus[]
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 }
@@ -121,4 +122,32 @@ model BonusHistoryRecord {
   totalClientBonus      Float
   averageMonthlyRevenue Float
   appliedBonusPercentage Float
+}
+
+model HalfYearBonus {
+  id              String          @id @default(uuid())
+  clientId        String
+  client          Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  period          String          // e.g. "2024-H1"
+  totalRevenue    Float
+  calculatedBonus Float
+  allocations     Json?           // Snapshot of MemberBonusAllocation[]
+  isFinalized     Boolean         @default(false)
+  payouts         QuarterPayout[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([clientId, period])
+}
+
+model QuarterPayout {
+  id              String        @id @default(uuid())
+  halfYearBonusId String
+  halfYearBonus   HalfYearBonus @relation(fields: [halfYearBonusId], references: [id], onDelete: Cascade)
+  payoutPeriod    String        // e.g. "2024-Q3"
+  amount          Float
+  status          String        @default("PENDING") // PENDING, PAID
+  dueDate         DateTime
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 }

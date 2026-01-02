@@ -57,6 +57,8 @@ export interface ClientBonusCalculation {
   totalBonusPool: number;
   allocations: IndividualAllocation[];
   isWeightValid: boolean;
+  period?: string; // YYYY-H1 or YYYY-H2
+  consideredMonthsList?: string[]; // List of YYYY-MM months
 }
 
 export interface IndividualAllocation {
@@ -90,6 +92,28 @@ export interface BonusHistoryRecord {
   totalClientBonus: number;
   averageMonthlyRevenue: number;
   appliedBonusPercentage: number;
+}
+
+export type HalfYear = 'H1' | 'H2';
+
+export interface QuarterPayout {
+  id: string;
+  halfYearBonusId: string;
+  payoutPeriod: string; // e.g. "2024-Q3"
+  amount: number;
+  status: 'PENDING' | 'PAID';
+  dueDate: string; // Date string
+}
+
+export interface HalfYearBonus {
+  id: string;
+  clientId: string;
+  period: string; // e.g. "2024-H1"
+  totalRevenue: number;
+  calculatedBonus: number;
+  isFinalized: boolean;
+  payouts: QuarterPayout[];
+  createdAt: string;
 }
 
 export interface AllocationChange {
